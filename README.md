@@ -1,1 +1,39 @@
-# El-Eternauta-Vientos-de-Octubre
+# El Eternauta: Vientos de Octubre
+
+## Descripción
+
+El Eternauta: Vientos de Octubre es un videojuego 2D independiente
+de aventura, supervivencia, exploración y narrativa.
+
+El proyecto está inspirado en la atmósfera de El Eternauta y utiliza
+escenarios argentinos, principalmente de Avellaneda.
+
+## Equipo
+
+- Rocabado — Analista funcional
+- Tanta — Project Manager
+- Mendoza — Programador
+- Solíz — Marketing
+- Escobar — Marketing
+
+## Tecnologías
+
+- Scratch
+- Visual Studio Code
+- Git
+- GitHub
+
+## Ejecución
+
+Para ejecutar el proyecto se necesita abrirlo utilizando Unity
+y cargar la escena principal.
+
+## Estructura
+
+- Assets/ → Recursos del videojuego
+- Packages/ → Dependencias de Unity
+- ProjectSettings/ → Configuración del proyecto
+- README.md → Documentación
+## Estado
+
+Proyecto escolar en desarrollo.
