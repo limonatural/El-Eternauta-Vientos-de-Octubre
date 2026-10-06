@@ -13,7 +13,7 @@ escenarios argentinos, principalmente de Avellaneda.
 - Rocabado — Analista funcional
 - Tanta — Project Manager
 - Mendoza — Programador
-- Solíz — Marketing
+- Raineiri — Marketing
 - Escobar — Marketing
 
 ## Tecnologías
