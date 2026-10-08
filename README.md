@@ -18,10 +18,9 @@ escenarios argentinos, principalmente de Avellaneda.
 
 ## Tecnologías
 
-- Scratch
+- Unity
 - Visual Studio Code
-- Git
-- GitHub
+- C#
 
 ## Ejecución
 
