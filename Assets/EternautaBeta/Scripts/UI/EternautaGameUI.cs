@@ -207,6 +207,7 @@ namespace Eternauta.Beta
             fuenteAngosta = Font.CreateDynamicFontFromOSFont(new[] { "Arial Narrow", "Liberation Sans Narrow", "Arial", "Liberation Sans" }, 36);
             fuenteNormal = Font.CreateDynamicFontFromOSFont(new[] { "Arial", "Liberation Sans", "Helvetica" }, 32);
             estilo = new GUIStyle(GUI.skin.label) { wordWrap = false, richText = false, clipping = TextClipping.Overflow };
+            PrecargarFuentes();
 
             iconoCorazon = Icono(new[]
             {
@@ -242,6 +243,36 @@ namespace Eternauta.Beta
                 ".XXX.XXX.",
                 "XXXXXXXXX",
             });
+        }
+
+        // Las fuentes dinámicas guardan cada letra, en cada tamaño y estilo, en una sola
+        // textura. Si se piden demasiados tamaños la textura se llena y se reconstruye
+        // a cada cuadro, y los textos salen chiquitos, deformados o encimados.
+        // Por eso la interfaz usa pocos tamaños fijos y se cargan al empezar.
+        static readonly int[] TamanosAngosta = { 36, 44, 56, 96 };
+        static readonly int[] TamanosNormal = { 26, 32, 40 };
+
+        static int Ajustar(int tam, int[] tamanos)
+        {
+            foreach (int t in tamanos) if (tam <= t + (t >= 56 ? 14 : 3)) return t;
+            return tamanos[tamanos.Length - 1];
+        }
+
+        void PrecargarFuentes()
+        {
+            const string caracteres = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÁÉÍÓÚÑáéíóúñü0123456789 .,:;!¡?¿\"'()[]<>+-·/%×—…“”";
+            Precargar(fuenteAngosta, TamanosAngosta, caracteres);
+            Precargar(fuenteNormal, TamanosNormal, caracteres);
+        }
+
+        static void Precargar(Font f, int[] tamanos, string caracteres)
+        {
+            if (f == null) return;
+            foreach (int t in tamanos)
+            {
+                f.RequestCharactersInTexture(caracteres, t, FontStyle.Normal);
+                f.RequestCharactersInTexture(caracteres, t, FontStyle.Bold);
+            }
         }
 
         static Texture2D Icono(string[] filas)
@@ -290,16 +321,20 @@ namespace Eternauta.Beta
             pantallaChica = Screen.height <= 600;
         }
 
-        // Tamaño de letra en px de referencia respetando el mínimo real (Etapa 12: 18 px, HUD 21 px).
-        int Px(int referencia, int minimoReal = 18)
+        // Tamaño de letra en px de referencia (1920×1080). Solo el HUD sube de tamaño en
+        // pantallas chicas para respetar el mínimo real de la Etapa 12 (21 px); el resto
+        // escala junto con sus paneles para que nada se salga de las cajas.
+        int Px(int referencia, int minimoReal = 0)
         {
-            return Mathf.Max(referencia, Mathf.CeilToInt(minimoReal / Mathf.Max(0.01f, escalaUI)));
+            if (minimoReal <= 0) return referencia;
+            int v = Mathf.CeilToInt(minimoReal / Mathf.Max(0.01f, escalaUI));
+            return Mathf.Min(Mathf.Max(referencia, v), referencia * 3 / 2);
         }
 
         GUIStyle Estilo(bool angosta, int tam, bool negrita, Color c, TextAnchor anc = TextAnchor.MiddleLeft, bool ajuste = false)
         {
             estilo.font = angosta ? fuenteAngosta : fuenteNormal;
-            estilo.fontSize = tam;
+            estilo.fontSize = Ajustar(tam, angosta ? TamanosAngosta : TamanosNormal);
             estilo.fontStyle = negrita ? FontStyle.Bold : FontStyle.Normal;
             estilo.normal.textColor = c;
             estilo.alignment = anc;
@@ -825,10 +860,10 @@ namespace Eternauta.Beta
         void DibujarDesarrollador()
         {
             if (Event.current.type != EventType.Repaint) return;
-            var r = new Rect(AW - 560, 140, 520, 470);
+            var r = new Rect(AW - 700, 140, 660, 520);
             Caja(r, ConAlfa(Negro, 0.8f));
             Marco(r, Rojo, 2f);
-            var st = Estilo(false, Px(22, 16), false, Blanco, TextAnchor.UpperLeft);
+            var st = Estilo(false, Px(22), false, Blanco, TextAnchor.UpperLeft);
             var esc = ContenidoJuego.EscenarioEn(jugador.x, jugador.y);
             var obj = progresion.Actual;
             string info =
