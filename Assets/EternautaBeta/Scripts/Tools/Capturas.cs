@@ -57,19 +57,13 @@ namespace Eternauta.Beta
             return salida;
         }
 
-        public static void DibujarAviso(float anchoUI, float altoUI, EternautaGame juego)
+        // Texto del aviso "Captura guardada" mientras debe verse (lo dibuja la interfaz); null si no hay aviso.
+        public static string AvisoVisible()
         {
-            if (ultimo == null || Event.current.type != EventType.Repaint) return;
+            if (ultimo == null) return null;
             float t = Time.unscaledTime;
-            if (t < avisoDesde || t > avisoHasta) return;
-            var r = new Rect(anchoUI - 760, altoUI - 90, 720, 50);
-            var antes = GUI.color;
-            GUI.color = new Color(0.02f, 0.03f, 0.04f, 0.85f);
-            GUI.DrawTexture(r, Texture2D.whiteTexture);
-            GUI.color = antes;
-            var st = new GUIStyle(GUI.skin.label) { fontSize = 22, alignment = TextAnchor.MiddleCenter };
-            st.normal.textColor = new Color(0.906f, 0.925f, 0.937f);
-            GUI.Label(r, "Captura guardada: " + ultimo, st);
+            if (t < avisoDesde || t > avisoHasta) return null;
+            return "Captura guardada: " + ultimo;
         }
     }
 }

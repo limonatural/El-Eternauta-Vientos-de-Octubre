@@ -7,6 +7,8 @@ namespace Eternauta.Beta
     {
         public float x, y;
         public float angulo;          // radianes; -PI/2 = norte
+        public float inclinacion;     // grados; + = mirar hacia arriba
+        public const float InclinacionMax = 70f;
         public float vida = 100f;     // 0..100 (1 segmento del HUD = 10 %)
         public float exposicion;      // 0..1, sube a la intemperie y baja bajo techo
         public bool traje;
@@ -23,9 +25,10 @@ namespace Eternauta.Beta
         public const float RecuperacionTecho = 1.5f; // bajo techo se recupera hasta 30
         public const float VidaRecuperable = 30f;
 
-        public void Actualizar(Mundo m, float avance, float lateral, float giro, bool correr, float dt, float limiteNorte)
+        public void Actualizar(Mundo m, float avance, float lateral, float giro, float mirar, bool correr, float dt, float limiteNorte)
         {
             angulo += giro;
+            inclinacion = Mathf.Clamp(inclinacion + mirar, -InclinacionMax, InclinacionMax);
             float dirX = Mathf.Cos(angulo), dirY = Mathf.Sin(angulo);
             float vel = correr ? VelCorrer : VelCaminar;
             if (vida <= 0f) vel *= 0.5f;
@@ -76,10 +79,9 @@ namespace Eternauta.Beta
 
         public bool Choca(Mundo m, float px, float py)
         {
-            return m.Solida(Mathf.FloorToInt(px - Radio), Mathf.FloorToInt(py - Radio)) ||
-                   m.Solida(Mathf.FloorToInt(px + Radio), Mathf.FloorToInt(py - Radio)) ||
-                   m.Solida(Mathf.FloorToInt(px - Radio), Mathf.FloorToInt(py + Radio)) ||
-                   m.Solida(Mathf.FloorToInt(px + Radio), Mathf.FloorToInt(py + Radio));
+            return m.SolidaPunto(px - Radio, py - Radio) || m.SolidaPunto(px + Radio, py - Radio) ||
+                   m.SolidaPunto(px - Radio, py + Radio) || m.SolidaPunto(px + Radio, py + Radio) ||
+                   m.SolidaPunto(px, py);
         }
 
         public void Curar(int cantidad) { vida = Mathf.Min(100f, vida + cantidad); }

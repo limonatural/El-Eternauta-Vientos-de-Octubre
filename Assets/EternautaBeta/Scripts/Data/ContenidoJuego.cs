@@ -82,6 +82,7 @@ namespace Eternauta.Beta
         public int cantidad = 1;
         public bool solido;
         public float radio = 0.3f;
+        public float angulo;         // giro del modelo 3D en grados (0 = el frente mira al sur)
         public int completaObjetivo; // id de objetivo que se completa al recogerlo (0 = ninguno)
         public string nombre;
     }
@@ -120,20 +121,21 @@ namespace Eternauta.Beta
         // Leyenda del mapa (cada carácter es una celda):
         //  #  ladrillo         H  casa / revoque     P  persiana metálica
         //  K  cartel almacén   W  ventana tapiada    C  cartel del puente
-        //  B  baranda puente   D  puerta (se abre con E)
+        //  B  vereda y baranda del puente      D  puerta (se abre y se cierra con E)
+        //  ~  río (Riachuelo, debajo del puente)  X  fin de la zona jugable (invisible)
         //  .  calle nevada     =  asfalto del puente
         //  ,  piso de madera (interior)   ;  baldosas (interior)
         // Norte = arriba. El Obelisco está hacia el norte, del otro lado del Riachuelo.
         public static readonly string[] Mapa =
         {
-            "###########BBBBBBBBB###########", // 0  fin del puente
-            "###########B=======B###########", // 1
-            "###########B=======B###########", // 2
-            "###########B=======B###########", // 3
-            "###########B=======B###########", // 4
-            "###########B=======B###########", // 5
-            "###########B=======B###########", // 6
-            "###########B=======B###########", // 7
+            "~~~~~~~~~~~BXXXXXXXB~~~~~~~~~~~", // 0  el puente sigue hacia Capital (fuera del mapa jugable)
+            "~~~~~~~~~~~B=======B~~~~~~~~~~~", // 1  Puente Pueyrredón sobre el Riachuelo
+            "~~~~~~~~~~~B=======B~~~~~~~~~~~", // 2
+            "~~~~~~~~~~~B=======B~~~~~~~~~~~", // 3
+            "~~~~~~~~~~~B=======B~~~~~~~~~~~", // 4
+            "~~~~~~~~~~~B=======B~~~~~~~~~~~", // 5
+            "~~~~~~~~~~~B=======B~~~~~~~~~~~", // 6
+            "~~~~~~~~~~~B=======B~~~~~~~~~~~", // 7
             "#######WWWCB=======BCPPP#######", // 8  entrada al puente
             "######H.................P######", // 9  Av. Mitre
             "######H.................P######", // 10
@@ -238,17 +240,22 @@ namespace Eternauta.Beta
         public const string RespuestaNoDar = "Entiendo. Cada uno se las arregla como puede.";
         public const string RespuestaSinMedicamento = "No tenés nada para darme, ya sé. Está bien.";
 
+        // Transmisión de la radio antigua (evento 2). La última línea se corta en la mitad.
         public static readonly string[] Radio =
         {
-            "...kssshh... a todos los sobrevivientes... no salgan sin protección...",
-            "...grupos organizados... del otro lado del Riachuelo... kssshh...",
-            "...repito: eviten todo contacto con la nieve... ...kssshhhhh",
+            "...kssshh... transmisión de emergencia... a todos los sobrevivientes... no salgan sin protección...",
+            "...efectivos del Ejército resisten en la zona del Obelisco... repito... en el Obelisco...",
+            "...los están atacando... no son personas... parecen bichos... bichos enormes, no son de este mundo...",
+            "...atención: los militares de la zona del Obelisco están siendo atacados por los mismos bich—",
         };
+        public const float RadioIntervalo = 4.4f;     // segundos entre líneas
+        public const float RadioUltimaLinea = 2.4f;   // la última se corta antes de terminar
+        public const string RadioCorte = "La señal se cortó de golpe. Solo queda estática.";
 
         public static readonly List<EventoDef> Eventos = new List<EventoDef>
         {
             new EventoDef { id = 1, nombre = "Aparición del sobreviviente", descripcion = "El jugador encuentra a un sobreviviente", idCapitulo = 1, idPersonaje = 1 },
-            new EventoDef { id = 2, nombre = "Transmisión de radio", descripcion = "La radio antigua capta una transmisión", idCapitulo = 1 },
+            new EventoDef { id = 2, nombre = "Transmisión de radio", descripcion = "La radio antigua capta una transmisión: los militares del Obelisco están siendo atacados", idCapitulo = 1 },
             new EventoDef { id = 3, nombre = "Traje aislante", descripcion = "El protagonista arma su traje aislante", idCapitulo = 1 },
             new EventoDef { id = 4, nombre = "Salida del refugio", descripcion = "El protagonista sale a la nieve por primera vez", idCapitulo = 1 },
             new EventoDef { id = 5, nombre = "Ayudar al informante", descripcion = "El jugador le da un medicamento al informante", idCapitulo = 1, idPersonaje = 1 },
@@ -259,7 +266,7 @@ namespace Eternauta.Beta
         public static readonly List<EntidadDef> Entidades = new List<EntidadDef>
         {
             // --- Refugio ---
-            new EntidadDef { id = 10, sprite = "mesa_trabajo", x = 11.5f, y = 37.4f, tipo = TipoEntidad.MesaTrabajo, solido = true, radio = 0.45f, nombre = "Mesa de trabajo" },
+            new EntidadDef { id = 10, angulo = 180f, sprite = "mesa_trabajo", x = 11.5f, y = 37.4f, tipo = TipoEntidad.MesaTrabajo, solido = true, radio = 0.45f, nombre = "Mesa de trabajo" },
             new EntidadDef { id = 11, sprite = "lona", x = 13.6f, y = 38.6f, tipo = TipoEntidad.Recurso, idRecurso = 5 },
             new EntidadDef { id = 12, sprite = "alambre", x = 19.5f, y = 38.6f, tipo = TipoEntidad.Recurso, idRecurso = 6 },
             new EntidadDef { id = 13, sprite = "botiquin", x = 19.5f, y = 36.5f, tipo = TipoEntidad.Recurso, idRecurso = 1 },
@@ -277,11 +284,11 @@ namespace Eternauta.Beta
             new EntidadDef { id = 45, sprite = "arbol", x = 4.5f, y = 28.5f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.25f },
             new EntidadDef { id = 46, sprite = "arbol", x = 4.0f, y = 17.5f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.25f },
             new EntidadDef { id = 47, sprite = "arbol", x = 26.5f, y = 17.5f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.25f },
-            new EntidadDef { id = 48, sprite = "banco", x = 12.6f, y = 23.5f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.4f },
-            new EntidadDef { id = 49, sprite = "banco", x = 18.4f, y = 23.5f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.4f },
+            new EntidadDef { id = 48, angulo = -90f, sprite = "banco", x = 12.6f, y = 23.5f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.4f },
+            new EntidadDef { id = 49, angulo = 90f, sprite = "banco", x = 18.4f, y = 23.5f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.4f },
             new EntidadDef { id = 50, sprite = "farola", x = 11.0f, y = 26.5f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.15f },
             new EntidadDef { id = 51, sprite = "farola", x = 20.0f, y = 21.0f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.15f },
-            new EntidadDef { id = 52, sprite = "auto_nevado", x = 24.5f, y = 29.3f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.7f },
+            new EntidadDef { id = 52, angulo = 15f, sprite = "auto_nevado", x = 24.5f, y = 29.3f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.7f },
             new EntidadDef { id = 53, sprite = "cartel_plaza", x = 13.4f, y = 29.6f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.15f },
             new EntidadDef { id = 54, sprite = "arbol", x = 17.5f, y = 27.5f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.25f },
 
@@ -289,11 +296,11 @@ namespace Eternauta.Beta
             new EntidadDef { id = 20, sprite = "lata", x = 3.4f, y = 19.6f, tipo = TipoEntidad.Recurso, idRecurso = 2, completaObjetivo = 2 },
             new EntidadDef { id = 21, sprite = "galletitas", x = 6.5f, y = 24.6f, tipo = TipoEntidad.Recurso, idRecurso = 3 },
             new EntidadDef { id = 22, sprite = "chatarra", x = 2.5f, y = 22.6f, tipo = TipoEntidad.Recurso, idRecurso = 7 },
-            new EntidadDef { id = 23, sprite = "radio", x = 2.6f, y = 25.3f, tipo = TipoEntidad.Radio, solido = true, radio = 0.35f, nombre = "Radio antigua" },
+            new EntidadDef { id = 23, angulo = -90f, sprite = "radio", x = 2.6f, y = 25.3f, tipo = TipoEntidad.Radio, solido = true, radio = 0.35f, nombre = "Radio antigua" },
             new EntidadDef { id = 24, sprite = "silla_rota", x = 6.6f, y = 20.4f, tipo = TipoEntidad.Decoracion },
 
             // --- Almacén ---
-            new EntidadDef { id = 30, sprite = "informante", x = 27.4f, y = 22.4f, tipo = TipoEntidad.Personaje, solido = true, radio = 0.35f, nombre = "El Informante" },
+            new EntidadDef { id = 30, angulo = 90f, sprite = "informante", x = 27.4f, y = 22.4f, tipo = TipoEntidad.Personaje, solido = true, radio = 0.35f, nombre = "El Informante" },
             new EntidadDef { id = 31, sprite = "choripan", x = 24.4f, y = 23.9f, tipo = TipoEntidad.Recurso, idRecurso = 4 },
             new EntidadDef { id = 32, sprite = "botiquin", x = 28.4f, y = 19.6f, tipo = TipoEntidad.Recurso, idRecurso = 1 },
             new EntidadDef { id = 33, sprite = "estanteria", x = 25.5f, y = 19.35f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.4f },
@@ -301,21 +308,21 @@ namespace Eternauta.Beta
             new EntidadDef { id = 35, sprite = "estanteria", x = 23.4f, y = 19.35f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.4f },
 
             // --- Avenida Mitre ---
-            new EntidadDef { id = 60, sprite = "auto_volcado", x = 9.6f, y = 12.0f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.8f },
-            new EntidadDef { id = 61, sprite = "auto_nevado", x = 19.6f, y = 10.4f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.8f },
-            new EntidadDef { id = 62, sprite = "auto_nevado", x = 14.2f, y = 14.6f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.8f },
-            new EntidadDef { id = 63, sprite = "semaforo", x = 22.6f, y = 13.5f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.2f },
+            new EntidadDef { id = 60, angulo = 20f, sprite = "auto_volcado", x = 9.6f, y = 12.0f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.8f },
+            new EntidadDef { id = 61, angulo = -5f, sprite = "auto_nevado", x = 19.6f, y = 10.4f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.8f },
+            new EntidadDef { id = 62, angulo = 75f, sprite = "auto_nevado", x = 14.2f, y = 14.6f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.8f },
+            new EntidadDef { id = 63, angulo = 90f, sprite = "semaforo", x = 22.6f, y = 13.5f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.2f },
             new EntidadDef { id = 64, sprite = "cartel_caido", x = 12.5f, y = 10.0f, tipo = TipoEntidad.Decoracion },
             new EntidadDef { id = 65, sprite = "cartel_avenida", x = 7.6f, y = 15.4f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.15f },
             new EntidadDef { id = 66, sprite = "farola", x = 16.8f, y = 12.2f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.15f },
-            new EntidadDef { id = 67, sprite = "auto_volcado", x = 21.0f, y = 15.2f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.8f },
+            new EntidadDef { id = 67, angulo = 100f, sprite = "auto_volcado", x = 21.0f, y = 15.2f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.8f },
 
             // --- Puente Pueyrredón ---
-            new EntidadDef { id = 70, sprite = "farola", x = 12.3f, y = 6.0f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.15f },
-            new EntidadDef { id = 71, sprite = "farola", x = 18.7f, y = 6.0f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.15f },
-            new EntidadDef { id = 72, sprite = "auto_volcado", x = 17.4f, y = 2.7f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.75f },
-            new EntidadDef { id = 73, sprite = "farola", x = 12.3f, y = 2.0f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.15f },
-            new EntidadDef { id = 74, sprite = "farola", x = 18.7f, y = 2.0f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.15f },
+            new EntidadDef { id = 70, angulo = -90f, sprite = "farola", x = 12.3f, y = 6.0f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.15f },
+            new EntidadDef { id = 71, angulo = 90f, sprite = "farola", x = 18.7f, y = 6.0f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.15f },
+            new EntidadDef { id = 72, angulo = 70f, sprite = "auto_volcado", x = 17.6f, y = 1.4f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.75f },
+            new EntidadDef { id = 73, angulo = -90f, sprite = "farola", x = 12.3f, y = 2.0f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.15f },
+            new EntidadDef { id = 74, angulo = 90f, sprite = "farola", x = 18.7f, y = 2.0f, tipo = TipoEntidad.Decoracion, solido = true, radio = 0.15f },
         };
 
         // Lugares para capturas (modo desarrollador, F4). Ángulo en grados: -90 = norte.

@@ -11,7 +11,8 @@ namespace Eternauta.Beta
     {
         W, A, S, D, Arriba, Abajo, Izquierda, Derecha,
         Shift, E, Espacio, Enter, Escape, Tab, I, Uno, Dos,
-        F2, F3, F4, F5, F6, F7, F8, F9, F11, F12
+        F2, F3, F4, F5, F6, F7, F8, F9, F11, F12,
+        R, F, AvPag, RePag // mirar arriba / abajo con teclado
     }
 
     public static class Entrada
@@ -61,6 +62,10 @@ namespace Eternauta.Beta
                 case Tecla.F9: return new[] { Key.F9 };
                 case Tecla.F11: return new[] { Key.F11 };
                 case Tecla.F12: return new[] { Key.F12 };
+                case Tecla.R: return new[] { Key.R };
+                case Tecla.F: return new[] { Key.F };
+                case Tecla.AvPag: return new[] { Key.PageDown };
+                case Tecla.RePag: return new[] { Key.PageUp };
             }
             return new Key[0];
         }
@@ -86,6 +91,13 @@ namespace Eternauta.Beta
         {
             var m = Mouse.current;
             return m == null ? 0f : m.delta.ReadValue().x;
+        }
+
+        // Movimiento vertical del mouse en píxeles de este frame (positivo = hacia arriba).
+        public static float MouseY()
+        {
+            var m = Mouse.current;
+            return m == null ? 0f : m.delta.ReadValue().y;
         }
 
         public static bool MouseMovido()
@@ -138,6 +150,10 @@ namespace Eternauta.Beta
                 case Tecla.F9: return new[] { KeyCode.F9 };
                 case Tecla.F11: return new[] { KeyCode.F11 };
                 case Tecla.F12: return new[] { KeyCode.F12 };
+                case Tecla.R: return new[] { KeyCode.R };
+                case Tecla.F: return new[] { KeyCode.F };
+                case Tecla.AvPag: return new[] { KeyCode.PageDown };
+                case Tecla.RePag: return new[] { KeyCode.PageUp };
             }
             return new KeyCode[0];
         }
@@ -157,6 +173,11 @@ namespace Eternauta.Beta
         public static float MouseX()
         {
             return Input.GetAxisRaw("Mouse X") * 10f;
+        }
+
+        public static float MouseY()
+        {
+            return Input.GetAxisRaw("Mouse Y") * 10f;
         }
 
         public static bool MouseMovido()

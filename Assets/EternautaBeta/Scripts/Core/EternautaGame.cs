@@ -15,21 +15,28 @@ namespace Eternauta.Beta
     public partial class EternautaGame : MonoBehaviour
     {
         [Header("Gráficos")]
-        [Tooltip("Filas de la imagen interna. 200 = resolución del Doom original.")]
-        [Range(120, 360)] public int resolucionVertical = 200;
-        [Range(55f, 95f)] public float campoVisual = 72f;
+        [Tooltip("Filas de la imagen interna (baja resolución estilo retro). 200 = Doom original.")]
+        [Range(160, 480)] public int resolucionVertical = 240;
+        [Tooltip("Campo visual vertical en grados.")]
+        [Range(45f, 80f)] public float campoVisual = 58f;
 
         [Header("Controles")]
         public float sensibilidadMouse = 0.0035f;
+        [Tooltip("Invertir el eje vertical del mouse al mirar arriba / abajo.")]
+        public bool invertirMouseY = false;
 
         // Sistemas
-        Raycaster raycaster;
+        MundoVisual visual;
         Mundo mundo;
         Jugador jugador;
         Inventario inventario;
         Progresion progresion;
         AudioProcedural audioJuego;
-        Dictionary<string, SpriteDef> sprites;
+
+        // Efectos de pantalla (se dibujan encima de la imagen 3D)
+        float escarcha, alertaRoja, destello, fundido;
+        bool efectoVHS = true;
+        float ampBalanceo, faseBalanceo;
 
         public Estado estado = Estado.MenuPrincipal;
         Estado origenOpciones, origenCreditos, origenInventario;
@@ -63,7 +70,7 @@ namespace Eternauta.Beta
         int introIdx;
         float introTiempo;
         int finalFase;
-        float finalTiempo, finalAnguloInicial;
+        float finalTiempo, finalAnguloInicial, finalInclinacionInicial;
 
         // Herramientas
         bool modoDesarrollador, modoFoto;
@@ -96,21 +103,26 @@ namespace Eternauta.Beta
                 Camera.main.gameObject.AddComponent<AudioListener>();
             }
 
-            sprites = ArteProcedural.Sprites();
-            raycaster = new Raycaster(resolucionVertical) { fovGrados = campoVisual };
             audioJuego = new AudioProcedural(gameObject);
             CargarOpciones();
             ReiniciarMundo();
+            visual = new MundoVisual(mundo, resolucionVertical);
             hayPartidaGuardada = SistemaGuardado.ExistePartida();
+        }
+
+        void OnDestroy()
+        {
+            if (visual != null) visual.Destruir();
         }
 
         void ReiniciarMundo()
         {
-            mundo = new Mundo(sprites);
+            mundo = new Mundo();
+            if (visual != null) visual.Vincular(mundo);
             jugador = new Jugador { x = ContenidoJuego.InicioX, y = ContenidoJuego.InicioY, angulo = ContenidoJuego.InicioAngulo * Mathf.Deg2Rad };
             inventario = new Inventario();
             progresion = new Progresion();
-            raycaster.conTraje = false;
+            if (visual != null) visual.conTraje = false;
             mensajes.Clear();
             zonaActual = -1;
             radioTiempo = -1f;
@@ -155,30 +167,32 @@ namespace Eternauta.Beta
             Cursor.lockState = estado == Estado.Jugando ? CursorLockMode.Locked : CursorLockMode.None;
             Cursor.visible = estado != Estado.Jugando;
 
-            // Dibujar el mundo
-            raycaster.AjustarAspecto(Screen.width / (float)Mathf.Max(1, Screen.height));
-            raycaster.fovGrados = campoVisual;
+            // Dibujar el mundo (cámara 3D en baja resolución)
+            visual.AjustarAspecto(Screen.width / (float)Mathf.Max(1, Screen.height));
+            visual.campoVisual = campoVisual;
+            visual.mostrarVistaPrevia = estado == Estado.Inventario;
+            visual.radioEncendida = radioTiempo >= 0f;
             bool pausado = estado == Estado.Pausa || estado == Estado.Inventario || estado == Estado.ConfirmarSalir ||
                            (estado == Estado.Opciones && origenOpciones == Estado.Pausa);
             float dtMundo = pausado ? 0f : dt;
+            destello = Mathf.MoveTowards(destello, 0f, dt * 3f);
             if (juegoVisible || estado == Estado.Final)
             {
-                raycaster.mostrarManos = estado != Estado.Final && !modoFoto;
-                raycaster.escarcha = jugador.bajoTecho ? jugador.exposicion * 0.3f : Mathf.Clamp01(jugador.exposicion * 0.9f + (jugador.vida <= 0f ? 0.5f : 0f));
-                raycaster.alertaRoja = jugador.Segmentos() <= 3 && !modoFoto ? 0.25f + 0.2f * Mathf.Sin(Time.time * 3f) : 0f;
-                raycaster.destello = Mathf.MoveTowards(raycaster.destello, 0f, dt * 3f);
-                if (estado != Estado.Final) raycaster.fundido = 0f;
-                raycaster.Dibujar(mundo, jugador.x, jugador.y, jugador.angulo, dtMundo, estado == Estado.Jugando ? objetivoInteraccion : null);
+                visual.mostrarManos = estado != Estado.Final && !modoFoto;
+                escarcha = jugador.bajoTecho ? jugador.exposicion * 0.3f : Mathf.Clamp01(jugador.exposicion * 0.9f + (jugador.vida <= 0f ? 0.5f : 0f));
+                alertaRoja = jugador.Segmentos() <= 3 && !modoFoto ? 0.25f + 0.2f * Mathf.Sin(Time.time * 3f) : 0f;
+                if (estado != Estado.Final) fundido = 0f;
+                visual.Actualizar(dtMundo, jugador.x, jugador.y, jugador.angulo, jugador.inclinacion, ampBalanceo, faseBalanceo,
+                    estado == Estado.Jugando ? objetivoInteraccion : null, estado == Estado.Jugando ? puertaX : -1, puertaY);
             }
             else
             {
                 // Fondo del menú: la plaza nevada girando despacio
                 anguloAtraccion += dt * 0.12f;
-                raycaster.mostrarManos = false;
-                raycaster.escarcha = 0.15f; raycaster.alertaRoja = 0f; raycaster.destello = 0f; raycaster.fundido = 0f;
-                raycaster.ampBalanceo = 0f;
-                raycaster.visibilidadObelisco = 0.3f;
-                raycaster.Dibujar(mundo, 15.5f, 27.5f, anguloAtraccion, dt, null);
+                visual.mostrarManos = false;
+                escarcha = 0.15f; alertaRoja = 0f; destello = 0f; fundido = 0f;
+                visual.visibilidadObelisco = 0.3f;
+                visual.Actualizar(dt, 15.5f, 27.5f, anguloAtraccion, 6f, 0f, 0f, null, -1, -1);
             }
 
             audioJuego.Actualizar(!juegoVisible && estado != Estado.Final, estado == Estado.Jugando, jugador.bajoTecho,
@@ -213,7 +227,7 @@ namespace Eternauta.Beta
             {
                 postalIdx = (postalIdx + 1) % ContenidoJuego.Postales.Count;
                 var p = ContenidoJuego.Postales[postalIdx];
-                jugador.x = p.x; jugador.y = p.y; jugador.angulo = p.angulo * Mathf.Deg2Rad;
+                jugador.x = p.x; jugador.y = p.y; jugador.angulo = p.angulo * Mathf.Deg2Rad; jugador.inclinacion = 0f;
                 AbrirTodasLasPuertas();
                 if (!jugador.traje) DarTraje();
                 Mostrar("DEV: " + p.nombre, 2f);
@@ -231,8 +245,8 @@ namespace Eternauta.Beta
             if (Entrada.Pulsada(Tecla.F7)) IrAlPuente();
             if (Entrada.Pulsada(Tecla.F8))
             {
-                raycaster.efectoVHS = !raycaster.efectoVHS;
-                Mostrar(raycaster.efectoVHS ? "DEV: efecto VHS activado" : "DEV: efecto VHS desactivado", 2f);
+                efectoVHS = !efectoVHS;
+                Mostrar(efectoVHS ? "DEV: efecto VHS activado" : "DEV: efecto VHS desactivado", 2f);
             }
         }
 
@@ -241,7 +255,7 @@ namespace Eternauta.Beta
             if (!jugador.traje) DarTraje();
             while (progresion.Actual != null && progresion.Actual.id != 4) progresion.indiceObjetivo++;
             AbrirTodasLasPuertas();
-            jugador.x = 15.5f; jugador.y = 7.5f; jugador.angulo = -90f * Mathf.Deg2Rad;
+            jugador.x = 15.5f; jugador.y = 7.5f; jugador.angulo = -90f * Mathf.Deg2Rad; jugador.inclinacion = 0f;
             if (estado != Estado.Jugando) estado = Estado.Jugando;
             Mostrar("DEV: saltaste al Puente Pueyrredón", 2f);
         }
@@ -269,14 +283,18 @@ namespace Eternauta.Beta
             if (Entrada.Mantenida(Tecla.Derecha)) giro += Jugador.VelGiro * dt;
             if (Entrada.Mantenida(Tecla.Izquierda)) giro -= Jugador.VelGiro * dt;
             giro += Entrada.MouseX() * sensibilidadMouse;
+            // Mirar arriba / abajo: mouse, R / F o Re Pág / Av Pág
+            float mirar = Entrada.MouseY() * sensibilidadMouse * Mathf.Rad2Deg * (invertirMouseY ? -1f : 1f);
+            if (Entrada.Mantenida(Tecla.R) || Entrada.Mantenida(Tecla.RePag)) mirar += 75f * dt;
+            if (Entrada.Mantenida(Tecla.F) || Entrada.Mantenida(Tecla.AvPag)) mirar -= 75f * dt;
 
             var obj = progresion.Actual;
             float limite = (obj == null || obj.id == 4) ? -1f : ContenidoJuego.LimiteNortePuente;
             bool estabaAdentro = jugador.bajoTecho;
-            jugador.Actualizar(mundo, avance, lateral, giro, Entrada.Mantenida(Tecla.Shift), dt, limite);
+            jugador.Actualizar(mundo, avance, lateral, giro, mirar, Entrada.Mantenida(Tecla.Shift), dt, limite);
 
-            raycaster.ampBalanceo = Mathf.MoveTowards(raycaster.ampBalanceo, jugador.caminando ? 1f : 0f, dt * 4f);
-            if (jugador.caminando) raycaster.faseBalanceo += dt * (Entrada.Mantenida(Tecla.Shift) ? 9f : 6.5f);
+            ampBalanceo = Mathf.MoveTowards(ampBalanceo, jugador.caminando ? 1f : 0f, dt * 4f);
+            if (jugador.caminando) faseBalanceo += dt * (Entrada.Mantenida(Tecla.Shift) ? 9f : 6.5f);
 
             if (jugador.bloqueadoNorte && avisoBloqueo <= 0f)
             {
@@ -329,11 +347,17 @@ namespace Eternauta.Beta
                 objetivoInteraccion = e;
             }
             if (objetivoInteraccion != null) return;
-            foreach (float alcance in new[] { 0.5f, 0.9f, 1.25f })
+            // Puertas: abiertas o cerradas, siempre se pueden usar (no si estás parado en el marco)
+            int px0 = Mathf.FloorToInt(jugador.x), py0 = Mathf.FloorToInt(jugador.y);
+            foreach (float alcance in new[] { 0.3f, 0.6f, 0.9f, 1.25f })
             {
                 int cx = Mathf.FloorToInt(jugador.x + dirX * alcance), cy = Mathf.FloorToInt(jugador.y + dirY * alcance);
                 char c = mundo.Celda(cx, cy);
-                if (c == 'D') { puertaX = cx; puertaY = cy; return; }
+                if (Mundo.EsPuerta(c))
+                {
+                    if (cx == px0 && cy == py0) continue;
+                    puertaX = cx; puertaY = cy; return;
+                }
                 if (Mundo.EsPared(c)) return;
             }
         }
@@ -342,6 +366,19 @@ namespace Eternauta.Beta
         {
             if (puertaX >= 0)
             {
+                if (mundo.Celda(puertaX, puertaY) == 'd')
+                {
+                    // Cerrar: solo si el protagonista no quedó en el marco
+                    if (TocaCelda(puertaX, puertaY))
+                    {
+                        audioJuego.Error();
+                        Mostrar("Salí del marco de la puerta para poder cerrarla.", 2f);
+                        return;
+                    }
+                    mundo.CerrarPuerta(puertaX, puertaY);
+                    audioJuego.Puerta();
+                    return;
+                }
                 bool esRefugio = puertaX == 15 && puertaY == 31;
                 if (esRefugio && !jugador.traje)
                 {
@@ -362,7 +399,7 @@ namespace Eternauta.Beta
                     var r = ContenidoJuego.Recurso(e.def.idRecurso);
                     inventario.Agregar(r.id, e.def.cantidad);
                     e.activa = false;
-                    raycaster.destello = 1f;
+                    destello = 1f;
                     audioJuego.Recoger();
                     Mostrar("Recogiste: " + r.nombre + " (+" + e.def.cantidad + ")", 2.5f);
                     if (e.def.completaObjetivo != 0) CompletarObjetivo(e.def.completaObjetivo);
@@ -394,10 +431,16 @@ namespace Eternauta.Beta
             }
         }
 
+        bool TocaCelda(int cx, int cy)
+        {
+            float r = Jugador.Radio + 0.02f;
+            return jugador.x + r > cx && jugador.x - r < cx + 1 && jugador.y + r > cy && jugador.y - r < cy + 1;
+        }
+
         void DarTraje()
         {
             jugador.traje = true;
-            raycaster.conTraje = true;
+            if (visual != null) visual.conTraje = true;
             progresion.Activar(3);
         }
 
@@ -417,10 +460,23 @@ namespace Eternauta.Beta
             radioTiempo += dt;
             for (int i = 0; i < ContenidoJuego.Radio.Length; i++)
             {
-                float t = i * 3.6f;
-                if (antes <= t && radioTiempo > t) Mostrar("RADIO: " + ContenidoJuego.Radio[i], 3.4f, true);
+                float t = i * ContenidoJuego.RadioIntervalo;
+                if (antes <= t && radioTiempo > t)
+                {
+                    // las líneas se reemplazan entre sí: la última se corta de golpe
+                    mensajes.RemoveAll(m => m.texto.StartsWith("RADIO: "));
+                    Mostrar("RADIO: " + ContenidoJuego.Radio[i], ContenidoJuego.RadioIntervalo - 0.15f, true);
+                }
             }
-            if (radioTiempo > ContenidoJuego.Radio.Length * 3.6f + 0.5f) radioTiempo = -1f;
+            float fin = (ContenidoJuego.Radio.Length - 1) * ContenidoJuego.RadioIntervalo + ContenidoJuego.RadioUltimaLinea;
+            if (radioTiempo > fin)
+            {
+                // Se corta la señal en plena advertencia
+                radioTiempo = -1f;
+                mensajes.RemoveAll(m => m.texto.StartsWith("RADIO: "));
+                audioJuego.Error();
+                Mostrar(ContenidoJuego.RadioCorte, 4f, true);
+            }
         }
 
         public void Mostrar(string texto, float segundos, bool alFrente = false)
@@ -582,6 +638,7 @@ namespace Eternauta.Beta
             finalFase = 0;
             finalTiempo = 0f;
             finalAnguloInicial = jugador.angulo;
+            finalInclinacionInicial = jugador.inclinacion;
             mensajes.Clear();
         }
 
@@ -596,16 +653,17 @@ namespace Eternauta.Beta
                 float objetivo = -Mathf.PI / 2f;
                 float delta = Mathf.DeltaAngle(finalAnguloInicial * Mathf.Rad2Deg, objetivo * Mathf.Rad2Deg) * Mathf.Deg2Rad;
                 jugador.angulo = finalAnguloInicial + delta * Mathf.SmoothStep(0f, 1f, t);
+                jugador.inclinacion = Mathf.Lerp(finalInclinacionInicial, 7f, Mathf.SmoothStep(0f, 1f, t));
                 jugador.x = Mathf.MoveTowards(jugador.x, 15.5f, dt * 0.5f);
                 if (jugador.y > 5.4f) jugador.y -= dt * 0.15f;
-                raycaster.ampBalanceo = 0f;
-                raycaster.visibilidadObelisco = Mathf.Lerp(0.3f, 1f, Mathf.Clamp01(finalTiempo / 6f));
-                raycaster.fundido = Mathf.Clamp01((finalTiempo - 9f) / 2.5f);
+                ampBalanceo = 0f;
+                visual.visibilidadObelisco = Mathf.Lerp(0.3f, 1f, Mathf.Clamp01(finalTiempo / 6f));
+                fundido = Mathf.Clamp01((finalTiempo - 9f) / 2.5f);
                 if (finalTiempo > 11.5f) { finalFase = 1; finalTiempo = 0f; }
             }
             else if (finalFase == 1)
             {
-                raycaster.fundido = 1f;
+                fundido = 1f;
                 if (finalTiempo > 7.5f) { finalFase = 2; finalTiempo = 0f; }
             }
             else
@@ -614,7 +672,7 @@ namespace Eternauta.Beta
                 estado = Estado.Creditos;
                 selCreditos = 0;
                 partidaEnCurso = false;
-                raycaster.visibilidadObelisco = 0.3f;
+                visual.visibilidadObelisco = 0.3f;
             }
         }
 
@@ -630,6 +688,7 @@ namespace Eternauta.Beta
                 id_escenario_actual = ContenidoJuego.EscenarioEn(jugador.x, jugador.y).id,
                 pos_x = jugador.x, pos_y = jugador.y,
                 angulo = jugador.angulo * Mathf.Rad2Deg,
+                inclinacion = jugador.inclinacion,
                 traje_aislante = jugador.traje,
                 inventario = inventario.Exportar(),
                 objetivos = progresion.ExportarObjetivos(),
@@ -655,6 +714,7 @@ namespace Eternauta.Beta
             ReiniciarMundo();
             jugador.x = p.pos_x; jugador.y = p.pos_y;
             jugador.angulo = p.angulo * Mathf.Deg2Rad;
+            jugador.inclinacion = Mathf.Clamp(p.inclinacion, -Jugador.InclinacionMax, Jugador.InclinacionMax);
             jugador.vida = Mathf.Clamp(p.vida, 0, 100);
             if (p.traje_aislante) DarTraje();
             inventario.Importar(p.inventario);

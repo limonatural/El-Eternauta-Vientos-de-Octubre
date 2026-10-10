@@ -24,6 +24,7 @@ namespace Eternauta.Beta
         public int id_escenario_actual;
         public int id_capitulo = 1;
         public float pos_x, pos_y, angulo;
+        public float inclinacion;     // mirar arriba / abajo (beta 1.1)
         public bool traje_aislante;
 
         // INVENTARIO (PartidaRecurso)
