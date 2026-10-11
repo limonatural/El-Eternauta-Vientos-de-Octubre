@@ -91,36 +91,53 @@ Versión probada: **beta 1.1.0** (se ve en el pie del menú principal y en el en
 
 | Resolución | Avisos de fuente | Desbordes | Cruces | Textos chicos | Letra mínima | Comprobaciones | Estado | Informe |
 |---|---|---|---|---|---|---|---|---|
-| 1920x1080 | | | | | | | | |
-| 1366x768 | | | | | | | | |
-| 1024x600 | | | | | | | | |
+Build `f32bd0223430466caf7e3fe64dc3b838`, compilado con Unity 6000.6.0f1, en Windows 10 (10.0.19045) 64 bit con AMD Radeon HD 7480D.
+Ejecutado el 11/10/2026 entre las 01:16 y las 01:19 con los accesos `PRUEBA_AUTOMATICA_*.bat`.
+
+| Resolución | Avisos de fuente | Desbordes | Cruces | Textos chicos | Letra mínima | Comprobaciones | Estado | Informe |
+|---|---|---|---|---|---|---|---|---|
+| 1920x1080 | No se pudo medir: la ventana salió en 1366x768 (ver nota) | | | | | | | |
+| 1366x768 (corrida 1, 01:16) | 0 | 0 | 0 | 0 | 20 px | 39 de 39 OK | **RESUELTO** | [informe](pruebas/INFORME_PRUEBAS_exe_1366x768_corrida1.md) |
+| 1366x768 (corrida 2, 01:18) | 0 | 0 | 0 | 0 | 20 px | 39 de 39 OK | **RESUELTO** | [informe](pruebas/INFORME_PRUEBAS_exe_1366x768_corrida2.md) |
+| 1024x600 | 0 | 0 | 0 | 0 | 15 px | 39 de 39 OK | **RESUELTO** | [informe](pruebas/INFORME_PRUEBAS_exe_1024x600.md) |
+
+Nota sobre 1920x1080 en el ejecutable: se corrieron los tres accesos, pero dos informes salieron en 1366x768.
+La corrida 1 es la primera en el orden de ejecución, así que corresponde al acceso de 1920x1080. Lo más probable es
+que la pantalla de la PC de prueba sea de 1366x768: Windows no deja abrir una ventana más grande que la
+pantalla, y Unity la ajusta al máximo disponible. La resolución de 1920x1080 quedó verificada en el Editor (tabla anterior).
+Para medirla también en el ejecutable hace falta correr `PRUEBA_AUTOMATICA_1920x1080.bat` en un monitor Full HD.
 
 ---
 
 ## 3. Prueba manual (jugando)
 
-Se juega normalmente con teclado y mouse, **sobre el ejecutable de Windows** (sección 4), en 1920x1080.
-Sacar captura (F12) de cada paso; quedan en `Capturas/` al lado del .exe.
+Se juega normalmente con teclado y mouse, **sobre el ejecutable de Windows** (sección 4).
+Se saca captura (F12) de cada paso; quedan en `Capturas/` al lado del .exe.
 
-- Versión: beta 1.1.0 · Plataforma: ejecutable de Windows · Fecha: ______ · Probó: ______
+- Versión: beta 1.1.0 (el pie del menú dice "BETA 1.1.0 (ejecutable)", captura `012127_menu.png`)
+- Plataforma: ejecutable de Windows, mismo build que la tabla de ERR-01, ventana de 1024x600
+- Fecha: 11/10/2026, de 01:21 a 01:30, después de las pruebas automáticas
+- Probó: el equipo, jugando con teclado y mouse
+- Capturas: carpeta [`pruebas/manual_exe/`](pruebas/manual_exe/) (nombre = hora y zona de la captura)
+- Resultado: **15 de 15 casos OK**
 
 | # | Caso | Pasos | Resultado esperado | Resultado | Captura |
 |---|---|---|---|---|---|
-| M01 | Apertura | Abrir el juego | Aparece el menú principal con "BETA 1.1.0 (ejecutable)" abajo, sin errores | | |
-| M02 | Nueva partida | NUEVA PARTIDA | Intro y luego el refugio con el objetivo "Armar el traje aislante" | | |
-| M03 | Movimiento y cámara | W A S D, Shift, mouse, R / F | El protagonista camina, corre, gira y mira arriba y abajo; no atraviesa paredes | | |
-| M04 | Puerta sin traje | E en la puerta del refugio | "Afuera la nieve mata...", la puerta no se abre | | |
-| M05 | Traje | Recoger 2 materiales y usar la mesa de trabajo | "Armaste el traje aislante", objetivo completado | | |
-| M06 | Puertas | Abrir la puerta del refugio, salir del marco y apretar E otra vez | La puerta se abre y se cierra, no desaparece | | |
-| M07 | Comida | Caminar hasta la casa abandonada y recoger la lata | Objetivo 2 completado | | |
-| M08 | Radio | Usar la radio y esperar | Avisa de los militares del Obelisco y se corta la señal | | |
-| M09 | Informante | Caminar al almacén, hablar y elegir con 1 o 2 | Diálogo, decisión y objetivo 3 completado | | |
-| M10 | Inventario | Tab, recorrer categorías con W/S y A/D, UTILIZAR un medicamento | Se ve el objeto en 3D, sube la salud, baja la cantidad | | |
-| M11 | Pausa | Esc, recorrer las opciones con el mouse y el teclado, CONTINUAR | El juego se detiene y vuelve | | |
-| M12 | Guardado | Completar un objetivo, Esc → VOLVER AL MENÚ → SÍ | Vuelve al menú con CONTINUAR habilitado | | |
-| M13 | CONTINUAR | CONTINUAR | Se retoma en el mismo lugar, con el mismo inventario y objetivo | | |
-| M14 | Final | Caminar por la Av. Mitre y cruzar el Puente Pueyrredón | Obelisco, "FIN DEL PRÓLOGO" y créditos | | |
-| M15 | Textos (ERR-01) | Mirar todas las pantallas anteriores | Ningún texto chico, cortado ni encimado | | |
+| M01 | Apertura | Abrir el juego | Aparece el menú principal con "BETA 1.1.0 (ejecutable)" abajo, sin errores | OK | [012127_menu](pruebas/manual_exe/012127_menu.png) |
+| M02 | Nueva partida | NUEVA PARTIDA | Intro y luego el refugio con el objetivo "Armar el traje aislante" | OK | [012150_refugio](pruebas/manual_exe/012150_refugio.png) |
+| M03 | Movimiento y cámara | W A S D, Shift, mouse, R / F | El protagonista camina, corre, gira y mira arriba y abajo; no atraviesa paredes | OK | [012218_refugio](pruebas/manual_exe/012218_refugio.png), [012251_refugio](pruebas/manual_exe/012251_refugio.png) |
+| M04 | Puerta sin traje | E en la puerta del refugio | "Afuera la nieve mata...", la puerta no se abre | OK | [012315_refugio](pruebas/manual_exe/012315_refugio.png) |
+| M05 | Traje | Recoger 2 materiales y usar la mesa de trabajo | "Armaste el traje aislante", objetivo completado | OK | [012349_refugio](pruebas/manual_exe/012349_refugio.png), [012354_refugio](pruebas/manual_exe/012354_refugio.png) |
+| M06 | Puertas | Abrir la puerta del refugio, salir del marco y apretar E otra vez | La puerta se abre y se cierra, no desaparece | OK | [012354_refugio](pruebas/manual_exe/012354_refugio.png), [012406_refugio](pruebas/manual_exe/012406_refugio.png) |
+| M07 | Comida | Caminar hasta la casa abandonada y recoger la lata | Objetivo 2 completado | OK | [012505_casa_abandonada](pruebas/manual_exe/012505_casa_abandonada.png) |
+| M08 | Radio | Usar la radio y esperar | Avisa de los militares del Obelisco y se corta la señal | OK | [012516_casa_abandonada](pruebas/manual_exe/012516_casa_abandonada.png) |
+| M09 | Informante | Caminar al almacén, hablar y elegir con 1 o 2 | Diálogo, decisión y objetivo 3 completado | OK | [012713_almacen](pruebas/manual_exe/012713_almacen.png) |
+| M10 | Inventario | Tab, recorrer categorías con W/S y A/D, UTILIZAR un medicamento | Se ve el objeto en 3D, sube la salud, baja la cantidad | OK | [012750_plaza_alsina](pruebas/manual_exe/012750_plaza_alsina.png), [012835_plaza_alsina](pruebas/manual_exe/012835_plaza_alsina.png) |
+| M11 | Pausa | Esc, recorrer las opciones con el mouse y el teclado, CONTINUAR | El juego se detiene y vuelve | OK | [012844_plaza_alsina](pruebas/manual_exe/012844_plaza_alsina.png) |
+| M12 | Guardado | Completar un objetivo, Esc → VOLVER AL MENÚ → SÍ | Vuelve al menú con CONTINUAR habilitado | OK | [012906_plaza_alsina](pruebas/manual_exe/012906_plaza_alsina.png) |
+| M13 | CONTINUAR | CONTINUAR | Se retoma en el mismo lugar, con el mismo inventario y objetivo | OK | [012910_almacen](pruebas/manual_exe/012910_almacen.png) |
+| M14 | Final | Caminar por la Av. Mitre y cruzar el Puente Pueyrredón | Obelisco, "FIN DEL PRÓLOGO" y créditos | OK | [012926_puente_pueyrredon](pruebas/manual_exe/012926_puente_pueyrredon.png), [013007_puente_pueyrredon](pruebas/manual_exe/013007_puente_pueyrredon.png) |
+| M15 | Textos (ERR-01) | Mirar todas las pantallas anteriores | Ningún texto chico, cortado ni encimado | OK | Todas las anteriores |
 
 ---
 
