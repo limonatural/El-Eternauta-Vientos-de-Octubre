@@ -1,0 +1,160 @@
+# Pruebas de la beta 1.1
+
+Este documento responde a las comprobaciones pendientes de la revisión técnica:
+**ERR-01** (fuentes y textos) y el **testing de la versión entregada** (apertura, recorrido, inventario,
+pausa, guardado, CONTINUAR y final del prólogo). La arquitectura (código anterior en `Assets/Scripts/`)
+está explicada en `Assets/Scripts/LEEME_CODIGO_ANTERIOR.md` y en la sección 7 de `README_BETA.md`.
+
+Las pruebas se hacen de dos formas: una **prueba automática** que recorre el juego sola y escribe un
+informe con capturas, y una **prueba manual** jugando con teclado y mouse. Los resultados se toman
+del juego funcionando: el informe y las capturas salen de la propia ejecución.
+
+---
+
+## 1. Prueba automática
+
+### Cómo se ejecuta
+
+- **En Unity:** menú **Eternauta → Ejecutar prueba automática**. Entra en Play, recorre el prólogo
+  (unos 90 segundos) y al terminar abre la carpeta con el informe. No hay que tocar nada mientras corre.
+- **En el juego compilado (.exe):** abrirlo con el argumento `-prueba`. Por ejemplo, desde una
+  consola en la carpeta del juego:
+
+  ```
+  "El Eternauta Vientos de Octubre.exe" -prueba
+  "El Eternauta Vientos de Octubre.exe" -prueba -screen-fullscreen 0 -screen-width 1366 -screen-height 768
+  "El Eternauta Vientos de Octubre.exe" -prueba -screen-fullscreen 0 -screen-width 1024 -screen-height 600
+  ```
+
+El resultado queda en `Capturas/Pruebas/<fecha>_<resolución>/`:
+
+- `INFORME_PRUEBAS.md`: tabla con cada comprobación (OK / FALLA), el estado de ERR-01 y los errores de consola.
+- Una captura PNG de cada pantalla recorrida (menú, opciones, créditos, intro, HUD, puertas, radio,
+  diálogo y decisión, inventario por categoría, pausa, confirmación, CONTINUAR, puente, final y créditos).
+
+La prueba respalda la partida guardada del jugador antes de empezar y la repone al terminar.
+
+### Qué comprueba
+
+| Área | Comprobaciones |
+|---|---|
+| Apertura | Abre en el menú principal, el mundo 3D se dibuja, se cargan las fuentes incluidas |
+| Recorrido | Puerta del refugio bloqueada sin traje; recoger lona, alambre y botiquín; mesa de trabajo (objetivo 1); puerta que se abre, se cierra y se vuelve a abrir; comida en la casa abandonada (objetivo 2); radio completa con el aviso del Obelisco y el corte de señal; diálogo con el Informante y decisión (objetivo 3) |
+| Inventario | Se abre, muestra las 4 categorías, UTILIZAR cura y descuenta el recurso, se cierra |
+| Pausa | Esc abre la pausa, inventario y opciones desde la pausa, confirmación de salida, CONTINUAR vuelve al juego |
+| Guardado | Se escribe el JSON con posición, traje, inventario y objetivos |
+| CONTINUAR | VOLVER AL MENÚ, CONTINUAR habilitado, y la partida se recupera desde el archivo |
+| Final | Al cruzar el puente empieza el final, Obelisco, "FIN DEL PRÓLOGO", créditos, objetivo 4 y progreso 100 % |
+| ERR-01 | Ver la sección 2 |
+
+La prueba usa las mismas funciones del juego que usa el jugador (las de la tecla E, el inventario, la
+pausa y los menús), pero ubica al protagonista al lado de cada objeto en lugar de caminar hasta él.
+Por eso el recorrido caminando se prueba también a mano (sección 3).
+
+---
+
+## 2. ERR-01: fuentes y textos
+
+**Problema original:** la consola mostraba `Unable to load font face for [Arial Narrow]` y en varias
+pantallas los textos se veían chicos, se salían de su caja o se cruzaban entre sí.
+
+**Corrección (beta 1.1):** la interfaz ya no pide fuentes al sistema operativo. Usa Roboto Condensed y
+Liberation Sans incluidas en `Assets/EternautaBeta/Resources/Fuentes` (con "Include Font Data"). Las letras
+se dibujan a su tamaño real y cada texto se achica solo si no entra en su caja.
+
+**Cómo se verifica:** durante la prueba automática se revisan **todos los textos de cada cuadro dibujado**:
+
+| Criterio | Se considera resuelto si |
+|---|---|
+| Avisos "Unable to load font face" en la consola | 0 |
+| Textos que no entran en su caja | 0 |
+| Textos que se cruzan con otro texto | 0 |
+| Textos de menos de 14 px reales | 0 |
+
+El informe dice **RESUELTO** o **PENDIENTE** y, si algo falla, lista la pantalla y el texto.
+Hay que correrla en las tres resoluciones de la Etapa 12 (lámina 9C): en Unity cambiando la resolución de la
+pestaña Game (1920x1080, 1366x768 y 1024x600) antes de cada ejecución, o en el .exe con los argumentos de arriba.
+
+### Registro de ERR-01
+
+Versión probada: **beta 1.1.0** (se ve en el pie del menú principal y en el encabezado de cada informe).
+
+**Editor de Unity 6000.6.0f1** (modo Play, Windows 10, AMD Radeon HD 7480D)
+
+| Resolución | Avisos de fuente | Desbordes | Cruces | Textos chicos | Letra mínima | Comprobaciones | Estado | Informe |
+|---|---|---|---|---|---|---|---|---|
+| 1920x1080 | 0 | 0 | 0 | 0 | 28 px | 39 de 39 OK | **RESUELTO** | [informe](pruebas/INFORME_PRUEBAS_editor_1920x1080.md) |
+| 1366x768 | 0 | 0 | 0 | 0 | 20 px | 39 de 39 OK | **RESUELTO** | [informe](pruebas/INFORME_PRUEBAS_editor_1366x768.md) |
+| 1024x600 | 0 | 0 | 0 | 0 | 15 px | 39 de 39 OK | **RESUELTO** | [informe](pruebas/INFORME_PRUEBAS_editor_1024x600.md) |
+
+**Ejecutable de Windows** (ver sección 4)
+
+| Resolución | Avisos de fuente | Desbordes | Cruces | Textos chicos | Letra mínima | Comprobaciones | Estado | Informe |
+|---|---|---|---|---|---|---|---|---|
+Build `f32bd0223430466caf7e3fe64dc3b838`, compilado con Unity 6000.6.0f1, en Windows 10 (10.0.19045) 64 bit con AMD Radeon HD 7480D.
+Ejecutado el 11/10/2026 entre las 01:16 y las 01:19 con los accesos `PRUEBA_AUTOMATICA_*.bat`.
+
+| Resolución | Avisos de fuente | Desbordes | Cruces | Textos chicos | Letra mínima | Comprobaciones | Estado | Informe |
+|---|---|---|---|---|---|---|---|---|
+| 1920x1080 | No se pudo medir: la ventana salió en 1366x768 (ver nota) | | | | | | | |
+| 1366x768 (corrida 1, 01:16) | 0 | 0 | 0 | 0 | 20 px | 39 de 39 OK | **RESUELTO** | [informe](pruebas/INFORME_PRUEBAS_exe_1366x768_corrida1.md) |
+| 1366x768 (corrida 2, 01:18) | 0 | 0 | 0 | 0 | 20 px | 39 de 39 OK | **RESUELTO** | [informe](pruebas/INFORME_PRUEBAS_exe_1366x768_corrida2.md) |
+| 1024x600 | 0 | 0 | 0 | 0 | 15 px | 39 de 39 OK | **RESUELTO** | [informe](pruebas/INFORME_PRUEBAS_exe_1024x600.md) |
+
+Nota sobre 1920x1080 en el ejecutable: se corrieron los tres accesos, pero dos informes salieron en 1366x768.
+La corrida 1 es la primera en el orden de ejecución, así que corresponde al acceso de 1920x1080. Lo más probable es
+que la pantalla de la PC de prueba sea de 1366x768: Windows no deja abrir una ventana más grande que la
+pantalla, y Unity la ajusta al máximo disponible. La resolución de 1920x1080 quedó verificada en el Editor (tabla anterior).
+Para medirla también en el ejecutable hace falta correr `PRUEBA_AUTOMATICA_1920x1080.bat` en un monitor Full HD.
+
+---
+
+## 3. Prueba manual (jugando)
+
+Se juega normalmente con teclado y mouse, **sobre el ejecutable de Windows** (sección 4).
+Se saca captura (F12) de cada paso; quedan en `Capturas/` al lado del .exe.
+
+- Versión: beta 1.1.0 (el pie del menú dice "BETA 1.1.0 (ejecutable)", captura `012127_menu.png`)
+- Plataforma: ejecutable de Windows, mismo build que la tabla de ERR-01, ventana de 1024x600
+- Fecha: 11/10/2026, de 01:21 a 01:30, después de las pruebas automáticas
+- Probó: el equipo, jugando con teclado y mouse
+- Capturas: carpeta [`pruebas/manual_exe/`](pruebas/manual_exe/) (nombre = hora y zona de la captura)
+- Resultado: **15 de 15 casos OK**
+
+| # | Caso | Pasos | Resultado esperado | Resultado | Captura |
+|---|---|---|---|---|---|
+| M01 | Apertura | Abrir el juego | Aparece el menú principal con "BETA 1.1.0 (ejecutable)" abajo, sin errores | OK | [012127_menu](pruebas/manual_exe/012127_menu.png) |
+| M02 | Nueva partida | NUEVA PARTIDA | Intro y luego el refugio con el objetivo "Armar el traje aislante" | OK | [012150_refugio](pruebas/manual_exe/012150_refugio.png) |
+| M03 | Movimiento y cámara | W A S D, Shift, mouse, R / F | El protagonista camina, corre, gira y mira arriba y abajo; no atraviesa paredes | OK | [012218_refugio](pruebas/manual_exe/012218_refugio.png), [012251_refugio](pruebas/manual_exe/012251_refugio.png) |
+| M04 | Puerta sin traje | E en la puerta del refugio | "Afuera la nieve mata...", la puerta no se abre | OK | [012315_refugio](pruebas/manual_exe/012315_refugio.png) |
+| M05 | Traje | Recoger 2 materiales y usar la mesa de trabajo | "Armaste el traje aislante", objetivo completado | OK | [012349_refugio](pruebas/manual_exe/012349_refugio.png), [012354_refugio](pruebas/manual_exe/012354_refugio.png) |
+| M06 | Puertas | Abrir la puerta del refugio, salir del marco y apretar E otra vez | La puerta se abre y se cierra, no desaparece | OK | [012354_refugio](pruebas/manual_exe/012354_refugio.png), [012406_refugio](pruebas/manual_exe/012406_refugio.png) |
+| M07 | Comida | Caminar hasta la casa abandonada y recoger la lata | Objetivo 2 completado | OK | [012505_casa_abandonada](pruebas/manual_exe/012505_casa_abandonada.png) |
+| M08 | Radio | Usar la radio y esperar | Avisa de los militares del Obelisco y se corta la señal | OK | [012516_casa_abandonada](pruebas/manual_exe/012516_casa_abandonada.png) |
+| M09 | Informante | Caminar al almacén, hablar y elegir con 1 o 2 | Diálogo, decisión y objetivo 3 completado | OK | [012713_almacen](pruebas/manual_exe/012713_almacen.png) |
+| M10 | Inventario | Tab, recorrer categorías con W/S y A/D, UTILIZAR un medicamento | Se ve el objeto en 3D, sube la salud, baja la cantidad | OK | [012750_plaza_alsina](pruebas/manual_exe/012750_plaza_alsina.png), [012835_plaza_alsina](pruebas/manual_exe/012835_plaza_alsina.png) |
+| M11 | Pausa | Esc, recorrer las opciones con el mouse y el teclado, CONTINUAR | El juego se detiene y vuelve | OK | [012844_plaza_alsina](pruebas/manual_exe/012844_plaza_alsina.png) |
+| M12 | Guardado | Completar un objetivo, Esc → VOLVER AL MENÚ → SÍ | Vuelve al menú con CONTINUAR habilitado | OK | [012906_plaza_alsina](pruebas/manual_exe/012906_plaza_alsina.png) |
+| M13 | CONTINUAR | CONTINUAR | Se retoma en el mismo lugar, con el mismo inventario y objetivo | OK | [012910_almacen](pruebas/manual_exe/012910_almacen.png) |
+| M14 | Final | Caminar por la Av. Mitre y cruzar el Puente Pueyrredón | Obelisco, "FIN DEL PRÓLOGO" y créditos | OK | [012926_puente_pueyrredon](pruebas/manual_exe/012926_puente_pueyrredon.png), [013007_puente_pueyrredon](pruebas/manual_exe/013007_puente_pueyrredon.png) |
+| M15 | Textos (ERR-01) | Mirar todas las pantallas anteriores | Ningún texto chico, cortado ni encimado | OK | Todas las anteriores |
+
+---
+
+## 4. Ejecutable de Windows
+
+### Compilar
+
+1. En Unity: **File → Build Profiles → Windows → Build**, en una carpeta nueva (por ejemplo `Build_beta_1.1.0`).
+2. Al terminar, en esa carpeta quedan el `.exe`, la carpeta `_Data` y, agregados por el proyecto,
+   `PRUEBA_AUTOMATICA_1920x1080.bat`, `PRUEBA_AUTOMATICA_1366x768.bat`, `PRUEBA_AUTOMATICA_1024x600.bat` y `LEEME_PRUEBAS.txt`.
+
+### Probar
+
+1. **Prueba automática:** doble clic en cada `PRUEBA_AUTOMATICA_*.bat`. El juego se abre en ventana con esa
+   resolución, se recorre solo y escribe el informe en `Capturas/Pruebas/<fecha>_exe_<resolución>/`.
+   El encabezado del informe dice "ejecutable de Windows compilado" y el identificador del build, para
+   diferenciarlo de las pruebas en el Editor.
+2. **Prueba manual:** doble clic en el `.exe` y completar la tabla de la sección 3.
+
+Si Windows muestra "Windows protegió su PC": **Más información → Ejecutar de todas formas**.

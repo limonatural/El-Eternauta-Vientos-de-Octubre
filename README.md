@@ -36,3 +36,7 @@ y cargar la escena principal.
 ## Estado
 
 Proyecto escolar en desarrollo.
+
+## Beta jugable
+
+Ver [README_BETA.md](README_BETA.md) para abrir y jugar la beta estilo Doom y sacar capturas.
