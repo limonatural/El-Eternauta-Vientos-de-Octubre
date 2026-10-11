@@ -79,7 +79,7 @@ pestaña Game (1920x1080, 1366x768 y 1024x600) antes de cada ejecución, o en el
 
 | Resolución | Avisos de fuente | Desbordes | Cruces | Textos chicos | Estado | Informe |
 |---|---|---|---|---|---|---|
-| 1920x1080 | | | | | | |
+| 1920x1080 | 0 | 0 | 0 | 0 | **RESUELTO** (468 textos revisados, letra mínima 28 px) | [INFORME_PRUEBAS_1920x1080.md](pruebas/INFORME_PRUEBAS_1920x1080.md) |
 | 1366x768 | | | | | | |
 | 1024x600 | | | | | | |
 
