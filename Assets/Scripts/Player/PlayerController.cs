@@ -1,3 +1,8 @@
+// CÓDIGO ANTERIOR (prototipo 2D de las tareas TT07 a TT12). No participa en la beta 1.1:
+// ninguna escena de la beta lo usa. Se conserva como antecedente del desarrollo.
+// En la beta 1.1 esta función está en Assets/EternautaBeta/Scripts/Logic/Jugador.cs y Scripts/Core/Entrada.cs.
+// Ver Assets/Scripts/LEEME_CODIGO_ANTERIOR.md
+
 using UnityEngine;
 
 // TT07 - Implementar controlador de movimiento (TF01)

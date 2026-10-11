@@ -36,6 +36,17 @@ namespace Eternauta.Beta.Herramientas
             EditorApplication.isPlaying = true;
         }
 
+        // Testing de la versión entregada y ERR-01: recorre el prólogo solo, saca capturas
+        // y deja un informe en Capturas/Pruebas (ver docs/beta/PRUEBAS_BETA_1.1.md).
+        [MenuItem("Eternauta/Ejecutar prueba automática", false, 20)]
+        static void Probar()
+        {
+            if (EditorApplication.isPlaying) { Debug.LogWarning("[Eternauta] Salí del modo Play antes de ejecutar la prueba."); return; }
+            if (!AbrirEscena()) return;
+            SessionState.SetBool(EternautaGame.ClavePrueba, true);
+            EditorApplication.isPlaying = true;
+        }
+
         [MenuItem("Eternauta/Abrir escena Beta", false, 1)]
         static void MenuAbrir() { AbrirEscena(); }
 

@@ -103,6 +103,13 @@ Se activa con **F9** durante una partida. Muestra FPS, posición, zona, salud y 
 | F7 | Saltar al puente para ver el final |
 | F8 | Activar / desactivar el efecto VHS |
 
+### Prueba automática (testing y ERR-01)
+
+Menú **Eternauta → Ejecutar prueba automática** (o el .exe con `-prueba`): recorre solo el prólogo completo,
+saca capturas de cada pantalla y escribe `Capturas/Pruebas/<fecha>_<resolución>/INFORME_PRUEBAS.md` con el
+resultado de cada comprobación y el estado de ERR-01. Detalle y planilla de prueba manual en
+[`docs/beta/PRUEBAS_BETA_1.1.md`](docs/beta/PRUEBAS_BETA_1.1.md).
+
 ## 4. Guía de evidencias
 
 Qué capturar para cada requerimiento (Etapa 6), historia de usuario (Etapa 8) y pantalla (Etapas 11 y 12):
@@ -166,11 +173,14 @@ Assets/EternautaBeta/
   Scripts/World/                Mundo (grilla del mapa, puertas, objetos)
   Scripts/UI/                   Menús, HUD, inventario, opciones, créditos, final (Etapa 12)
   Scripts/Audio/                Viento, pasos, radio, latidos (sonidos generados por código)
-  Scripts/Tools/                Capturas (F12)
+  Scripts/Tools/                Capturas (F12), PruebaAutomatica (testing y ERR-01)
   Editor/                       Menú "Eternauta" de Unity
 ```
 
 - **Presentación**: `UI/`, `Render/`. **Lógica**: `Logic/`, `World/`. **Datos**: `Data/`.
+- **Código anterior:** los scripts de `Assets/Scripts/` son el prototipo 2D de las tareas TT07 a TT12 y **no
+  participan en la beta 1.1** (la escena de la beta no los usa). Se conservan como antecedente; la tabla con su
+  equivalente en la beta está en `Assets/Scripts/LEEME_CODIGO_ANTERIOR.md`.
 - Todos los modelos 3D, texturas y sonidos se generan por código: no hace falta importar arte.
 - Para cambiar textos, créditos, objetivos o el mapa: `Scripts/Data/ContenidoJuego.cs` (el mapa es una
   grilla de caracteres con la leyenda explicada ahí mismo).

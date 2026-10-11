@@ -410,6 +410,7 @@ namespace Eternauta.Beta
                 t = Mathf.Max(minimo, t - Mathf.Max(1, t / 12));
                 st.fontSize = t;
             }
+            if (registroTextos != null) RegistrarTexto(rs, s, st, c, Entra(st, c, rs), t, l.color.a);
             GUI.Label(rs, c, st);
         }
 
@@ -565,6 +566,8 @@ namespace Eternauta.Beta
                 if (modoDesarrollador) DibujarDesarrollador();
             }
             DibujarAvisoCaptura();
+            AnalizarTextos();
+            DibujarResumenPrueba();
         }
 
         // ---------------- EFECTOS DE PANTALLA ----------------
@@ -743,7 +746,7 @@ namespace Eternauta.Beta
             // Queda arriba del cartel de interacción (que ocupa hasta AH - 48 - 64 - 54).
             var r = new Rect(AW / 2 - w / 2, AH - 48 - 64 - 54 - 24 - h, w, h);
             if (estado == Estado.Dialogo) r.y = AH - 400 - h;
-            else if (estado == Estado.Inventario) r.y = 890 + 50;
+            else if (estado == Estado.Inventario || estado == Estado.Pausa) r.y = Mathf.Min(940f, AH - 16f - h); // debajo del panel, sin tapar el objetivo de la pausa
             Caja(r, ConAlfa(Negro, 0.78f * a));
             Texto(new Rect(r.x + 24, r.y + 6, r.width - 48, r.height - 12), msj.texto, st);
         }
