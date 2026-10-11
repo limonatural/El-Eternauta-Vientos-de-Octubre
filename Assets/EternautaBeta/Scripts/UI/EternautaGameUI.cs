@@ -769,7 +769,7 @@ namespace Eternauta.Beta
                 CajaReal(new Rect(0, 0, S(new Rect(0, 0, 820, 1)).xMax, Screen.height), ConAlfa(Negro, 0.6f));
                 Texto(new Rect(150, 140, 1200, 130), ContenidoJuego.NombreJuego, Estilo(true, 96, true, Blanco));
                 Texto(new Rect(156, 262, 1200, 60), "V I E N T O S   D E   O C T U B R E", Estilo(true, 34, false, Azul));
-                Texto(new Rect(156, AH - 96, 1600, 44), "BETA 1.1  ·  F12 captura  ·  F11 modo foto  ·  F9 modo desarrollador", Estilo(false, 28, false, Gris));
+                Texto(new Rect(156, AH - 96, 1600, 44), "BETA " + Application.version + (Application.isEditor ? " (Editor de Unity)" : " (ejecutable)") + "  ·  F12 captura  ·  F11 modo foto  ·  F9 modo desarrollador", Estilo(false, 28, false, Gris));
             }
             var ops = OpcionesMenu();
             for (int i = 0; i < ops.Length; i++)

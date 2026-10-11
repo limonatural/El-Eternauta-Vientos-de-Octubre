@@ -47,7 +47,7 @@ en `docs/beta/PRUEBAS_BETA_1.1.md`, sección 2.
 | VOLVER AL MENÚ y CONTINUAR recuperando la partida | OK (3 de 3) |
 | Finalización del prólogo (final, créditos, progreso 100 %) | OK (3 de 3) |
 
-El informe completo, con cada comprobación, está en `docs/beta/pruebas/INFORME_PRUEBAS_1920x1080.md`, y se
+El informe completo, con cada comprobación, está en `docs/beta/pruebas/INFORME_PRUEBAS_editor_1920x1080.md`, y se
 adjuntan las 31 capturas que sacó la prueba.
 
 **Cómo repetir la prueba:** abrir el proyecto en Unity y elegir el menú **Eternauta → Ejecutar prueba automática**.
@@ -61,5 +61,5 @@ tiene su planilla de prueba manual en `docs/beta/PRUEBAS_BETA_1.1.md`, sección 
   (pull request #6).
 - `README_BETA.md`: cómo abrir y jugar la beta.
 - `docs/beta/PRUEBAS_BETA_1.1.md`: procedimiento de pruebas y criterios de ERR-01.
-- `docs/beta/pruebas/INFORME_PRUEBAS_1920x1080.md`: informe de la prueba.
+- `docs/beta/pruebas/INFORME_PRUEBAS_editor_1920x1080.md`: informe de la prueba.
 - `Assets/Scripts/LEEME_CODIGO_ANTERIOR.md`: código anterior.

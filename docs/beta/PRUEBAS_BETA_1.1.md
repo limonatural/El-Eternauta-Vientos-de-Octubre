@@ -75,34 +75,69 @@ El informe dice **RESUELTO** o **PENDIENTE** y, si algo falla, lista la pantalla
 Hay que correrla en las tres resoluciones de la Etapa 12 (lámina 9C): en Unity cambiando la resolución de la
 pestaña Game (1920x1080, 1366x768 y 1024x600) antes de cada ejecución, o en el .exe con los argumentos de arriba.
 
-### Registro de ERR-01 (completar con los informes)
+### Registro de ERR-01
 
-| Resolución | Avisos de fuente | Desbordes | Cruces | Textos chicos | Estado | Informe |
-|---|---|---|---|---|---|---|
-| 1920x1080 | 0 | 0 | 0 | 0 | **RESUELTO** (468 textos revisados, letra mínima 28 px) | [INFORME_PRUEBAS_1920x1080.md](pruebas/INFORME_PRUEBAS_1920x1080.md) |
-| 1366x768 | | | | | | |
-| 1024x600 | | | | | | |
+Versión probada: **beta 1.1.0** (se ve en el pie del menú principal y en el encabezado de cada informe).
+
+**Editor de Unity 6000.6.0f1** (modo Play, Windows 10, AMD Radeon HD 7480D)
+
+| Resolución | Avisos de fuente | Desbordes | Cruces | Textos chicos | Letra mínima | Comprobaciones | Estado | Informe |
+|---|---|---|---|---|---|---|---|---|
+| 1920x1080 | 0 | 0 | 0 | 0 | 28 px | 39 de 39 OK | **RESUELTO** | [informe](pruebas/INFORME_PRUEBAS_editor_1920x1080.md) |
+| 1366x768 | 0 | 0 | 0 | 0 | 20 px | 39 de 39 OK | **RESUELTO** | [informe](pruebas/INFORME_PRUEBAS_editor_1366x768.md) |
+| 1024x600 | 0 | 0 | 0 | 0 | 15 px | 39 de 39 OK | **RESUELTO** | [informe](pruebas/INFORME_PRUEBAS_editor_1024x600.md) |
+
+**Ejecutable de Windows** (ver sección 4)
+
+| Resolución | Avisos de fuente | Desbordes | Cruces | Textos chicos | Letra mínima | Comprobaciones | Estado | Informe |
+|---|---|---|---|---|---|---|---|---|
+| 1920x1080 | | | | | | | | |
+| 1366x768 | | | | | | | | |
+| 1024x600 | | | | | | | | |
 
 ---
 
 ## 3. Prueba manual (jugando)
 
-Con el .exe o con Play en Unity, jugando normalmente con teclado y mouse. Sacar captura (F12) de cada paso.
+Se juega normalmente con teclado y mouse, **sobre el ejecutable de Windows** (sección 4), en 1920x1080.
+Sacar captura (F12) de cada paso; quedan en `Capturas/` al lado del .exe.
+
+- Versión: beta 1.1.0 · Plataforma: ejecutable de Windows · Fecha: ______ · Probó: ______
 
 | # | Caso | Pasos | Resultado esperado | Resultado | Captura |
 |---|---|---|---|---|---|
-| M01 | Apertura | Abrir el juego | Aparece el menú principal, sin errores | | |
+| M01 | Apertura | Abrir el juego | Aparece el menú principal con "BETA 1.1.0 (ejecutable)" abajo, sin errores | | |
 | M02 | Nueva partida | NUEVA PARTIDA | Intro y luego el refugio con el objetivo "Armar el traje aislante" | | |
-| M03 | Movimiento y cámara | W A S D, mouse, R / F | El protagonista camina, gira y mira arriba y abajo | | |
+| M03 | Movimiento y cámara | W A S D, Shift, mouse, R / F | El protagonista camina, corre, gira y mira arriba y abajo; no atraviesa paredes | | |
 | M04 | Puerta sin traje | E en la puerta del refugio | "Afuera la nieve mata...", la puerta no se abre | | |
 | M05 | Traje | Recoger 2 materiales y usar la mesa de trabajo | "Armaste el traje aislante", objetivo completado | | |
 | M06 | Puertas | Abrir la puerta del refugio, salir del marco y apretar E otra vez | La puerta se abre y se cierra, no desaparece | | |
-| M07 | Comida | Ir a la casa abandonada y recoger la lata | Objetivo 2 completado | | |
+| M07 | Comida | Caminar hasta la casa abandonada y recoger la lata | Objetivo 2 completado | | |
 | M08 | Radio | Usar la radio y esperar | Avisa de los militares del Obelisco y se corta la señal | | |
-| M09 | Informante | Hablar en el almacén y elegir con 1 o 2 | Diálogo, decisión y objetivo 3 completado | | |
-| M10 | Inventario | Tab, recorrer categorías, UTILIZAR un medicamento | Se ve el objeto en 3D, sube la salud, baja la cantidad | | |
-| M11 | Pausa | Esc, recorrer las opciones, CONTINUAR | El juego se detiene y vuelve | | |
+| M09 | Informante | Caminar al almacén, hablar y elegir con 1 o 2 | Diálogo, decisión y objetivo 3 completado | | |
+| M10 | Inventario | Tab, recorrer categorías con W/S y A/D, UTILIZAR un medicamento | Se ve el objeto en 3D, sube la salud, baja la cantidad | | |
+| M11 | Pausa | Esc, recorrer las opciones con el mouse y el teclado, CONTINUAR | El juego se detiene y vuelve | | |
 | M12 | Guardado | Completar un objetivo, Esc → VOLVER AL MENÚ → SÍ | Vuelve al menú con CONTINUAR habilitado | | |
 | M13 | CONTINUAR | CONTINUAR | Se retoma en el mismo lugar, con el mismo inventario y objetivo | | |
-| M14 | Final | Ir por la Av. Mitre y cruzar el Puente Pueyrredón | Obelisco, "FIN DEL PRÓLOGO" y créditos | | |
+| M14 | Final | Caminar por la Av. Mitre y cruzar el Puente Pueyrredón | Obelisco, "FIN DEL PRÓLOGO" y créditos | | |
 | M15 | Textos (ERR-01) | Mirar todas las pantallas anteriores | Ningún texto chico, cortado ni encimado | | |
+
+---
+
+## 4. Ejecutable de Windows
+
+### Compilar
+
+1. En Unity: **File → Build Profiles → Windows → Build**, en una carpeta nueva (por ejemplo `Build_beta_1.1.0`).
+2. Al terminar, en esa carpeta quedan el `.exe`, la carpeta `_Data` y, agregados por el proyecto,
+   `PRUEBA_AUTOMATICA_1920x1080.bat`, `PRUEBA_AUTOMATICA_1366x768.bat`, `PRUEBA_AUTOMATICA_1024x600.bat` y `LEEME_PRUEBAS.txt`.
+
+### Probar
+
+1. **Prueba automática:** doble clic en cada `PRUEBA_AUTOMATICA_*.bat`. El juego se abre en ventana con esa
+   resolución, se recorre solo y escribe el informe en `Capturas/Pruebas/<fecha>_exe_<resolución>/`.
+   El encabezado del informe dice "ejecutable de Windows compilado" y el identificador del build, para
+   diferenciarlo de las pruebas en el Editor.
+2. **Prueba manual:** doble clic en el `.exe` y completar la tabla de la sección 3.
+
+Si Windows muestra "Windows protegió su PC": **Más información → Ejecutar de todas formas**.

@@ -232,7 +232,7 @@ namespace Eternauta.Beta
         {
             pruebaEnCurso = true;
             string stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-            carpetaPrueba = Path.Combine(Capturas.Carpeta, "Pruebas", stamp + "_" + Screen.width + "x" + Screen.height);
+            carpetaPrueba = Path.Combine(Capturas.Carpeta, "Pruebas", stamp + "_" + (Application.isEditor ? "editor" : "exe") + "_" + Screen.width + "x" + Screen.height);
             Directory.CreateDirectory(carpetaPrueba);
             Application.logMessageReceived += AlRecibirLog;
             registroTextos = new List<TextoDibujado>();
@@ -574,10 +574,12 @@ namespace Eternauta.Beta
             var sb = new StringBuilder();
             int ok = 0;
             foreach (var r in resultados) if (r.ok) ok++;
-            sb.AppendLine("# Informe de pruebas: El Eternauta, Vientos de Octubre (beta 1.1)");
+            sb.AppendLine("# Informe de pruebas: El Eternauta, Vientos de Octubre (beta " + Application.version + ", " + (Application.isEditor ? "Editor" : "ejecutable") + ")");
             sb.AppendLine();
             sb.AppendLine("- Fecha: " + DateTime.Now.ToString("dd/MM/yyyy HH:mm"));
-            sb.AppendLine("- Unity: " + Application.unityVersion + (Application.isEditor ? " (Editor)" : " (juego compilado)"));
+            sb.AppendLine("- Versión del juego: " + Application.version);
+            sb.AppendLine("- Dónde se ejecutó: " + (Application.isEditor ? "Editor de Unity (modo Play)" : "ejecutable de Windows compilado (build " + Application.buildGUID + ")"));
+            sb.AppendLine("- Unity: " + Application.unityVersion);
             sb.AppendLine("- Sistema: " + SystemInfo.operatingSystem + " · GPU: " + SystemInfo.graphicsDeviceName);
             sb.AppendLine("- Resolución probada: " + Screen.width + "×" + Screen.height);
             sb.AppendLine("- Duración: " + Mathf.RoundToInt(segundos) + " s");
