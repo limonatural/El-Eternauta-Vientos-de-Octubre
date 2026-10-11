@@ -64,7 +64,7 @@ namespace Eternauta.Beta
         // ------------------------------------------------------------------
         void RegistrarTexto(Rect rs, string s, GUIStyle st, GUIContent c, bool entra, int tam, float alfa)
         {
-            if (registroTextos == null || fondo || alfa < 0.1f || Event.current.type != EventType.Repaint) return;
+            if (registroTextos == null || fondo || alfa < 0.1f || Event.current == null || Event.current.type != EventType.Repaint) return;
             Vector2 medida = st.wordWrap ? new Vector2(rs.width, st.CalcHeight(c, rs.width)) : st.CalcSize(c);
             float x = rs.x, y = rs.y;
             switch (st.alignment)
@@ -87,7 +87,8 @@ namespace Eternauta.Beta
         // Se llama al final de cada OnGUI de dibujo mientras corre la prueba.
         void AnalizarTextos()
         {
-            if (registroTextos == null || Event.current.type != EventType.Repaint) return;
+            // Solo dentro de OnGUI: fuera de OnGUI no hay Event.current.
+            if (registroTextos == null || Event.current == null || Event.current.type != EventType.Repaint) return;
             cuadrosAnalizados++;
             string p = (string.IsNullOrEmpty(pantallaPrueba) ? "" : pantallaPrueba + " / ") + estado;
             for (int i = 0; i < registroTextos.Count; i++)
@@ -279,7 +280,6 @@ namespace Eternauta.Beta
             // Fin: se repone la partida guardada del jugador y se vuelve al menú.
             pantallaPrueba = "fin";
             yield return null;
-            AnalizarTextos();
             registroTextos = null;
             Application.logMessageReceived -= AlRecibirLog;
             try
@@ -289,9 +289,13 @@ namespace Eternauta.Beta
             }
             catch (Exception ex) { Debug.LogWarning("[Eternauta] No se pudo reponer la partida guardada: " + ex.Message); }
             jugador.invulnerable = false;
-            VolverAlMenu();
-
-            string informe = EscribirInforme(Time.realtimeSinceStartup - inicio);
+            string informe = Path.Combine(carpetaPrueba, "INFORME_PRUEBAS.md");
+            try
+            {
+                VolverAlMenu();
+                informe = EscribirInforme(Time.realtimeSinceStartup - inicio);
+            }
+            catch (Exception ex) { Debug.LogError("[Eternauta] La prueba no pudo terminar el informe: " + ex); }
             int ok = 0;
             foreach (var r in resultados) if (r.ok) ok++;
             bool err01 = Err01Resuelto();
