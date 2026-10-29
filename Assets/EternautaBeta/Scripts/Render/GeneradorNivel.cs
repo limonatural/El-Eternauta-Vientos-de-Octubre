@@ -13,10 +13,10 @@ namespace Eternauta.Beta
     }
 
     // Arma el escenario 3D a partir de la grilla del mapa:
-    // paredes con altura real, pisos, techos, el Puente Pueyrredón completo sobre el
-    // Riachuelo, la avenida del otro lado y el Obelisco al fondo.
+    // paredes con altura real, pisos, techos, fachadas de los lugares, muros de nieve (límite),
+    // el Riachuelo con el Puente Pueyrredón y, según el mapa, la Capital o la Av. 9 de Julio.
     // Ejes: X = columna del mapa, Z = -fila (el norte del mapa es +Z), Y = altura.
-    // No usa nada de Unity salvo tipos básicos, así que se puede revisar fuera del Editor.
+    // Las mallas se parten en bloques de 32 x 32 celdas para que Unity descarte los que no se ven.
     public class GeneradorNivel
     {
         public const float AltoInterior = 1.4f;   // techo de las habitaciones (2,8 m)
@@ -24,9 +24,9 @@ namespace Eternauta.Beta
         public const float AltoPuerta = 1.05f;
         public const float NivelAgua = -3.0f;
         public const float AltoTechos = 2.6f;     // techo de las casas visto desde afuera
-        public const float OrillaSur = -8f, OrillaNorte = 30f; // costas del Riachuelo (Z)
-        public const float BordeOeste = 11f, BordeEste = 20f;  // ancho del puente (X)
-        public static readonly Vector3 PosObelisco = new Vector3(15.5f, 0f, 122f);
+        public const float OrillaNorte = 30f;     // costa norte del Riachuelo (Z) vista desde Avellaneda
+        public const int Bloque = 32;
+        public const string ClaveMuroNorte = "@muroN";
 
         public readonly Dictionary<string, ConstructorMalla> mallas = new Dictionary<string, ConstructorMalla>();
         public ConstructorMalla obelisco;
@@ -34,16 +34,28 @@ namespace Eternauta.Beta
         public readonly List<PuertaInfo> puertas = new List<PuertaInfo>();
         public readonly List<Vector3> bengalas = new List<Vector3>();   // luces rojas cerca del Obelisco
         public readonly List<Vector3> fogonazos = new List<Vector3>();  // disparos a lo lejos
+        public readonly HashSet<int> horneadas = new HashSet<int>();    // decoración pegada a la malla estática
+        public Vector3 posObelisco;
+        public bool hayObelisco;
 
         readonly Mundo mundo;
+        readonly DatosMapa datos;
         readonly System.Random rnd = new System.Random(1234);
+        readonly Vector3 obeliscoLocal = new Vector3(15.5f, 0f, 122f);
+        string chunk = "";
 
-        public GeneradorNivel(Mundo m) { mundo = m; }
+        public GeneradorNivel(Mundo m) { mundo = m; datos = m.datos; }
+
+        public static string ClaveBase(string clave)
+        {
+            int i = clave.IndexOf('@');
+            return i < 0 ? clave : clave.Substring(0, i);
+        }
 
         // Texturas que usa el escenario (se repiten: 1 celda = 1 repetición).
         public static Dictionary<string, Lienzo> Texturas()
         {
-            return new Dictionary<string, Lienzo>
+            var t = new Dictionary<string, Lienzo>
             {
                 { "ladrillo", ArteProcedural.Ladrillo(true, 1) },
                 { "ladrillo_liso", ArteProcedural.LadrilloLiso(31) },
@@ -68,16 +80,25 @@ namespace Eternauta.Beta
                 { "agua", ArteProcedural.Agua(18) },
                 { "acero", ArteProcedural.Acero(19) },
                 { "cielo", ArteProcedural.Cielo() },
+                { "muro_nieve", ArteLugares.MuroNieve(41) },
+                { "plaza", ArteLugares.Plaza(42) },
             };
+            foreach (char c in "mbicieayruKgf")
+            {
+                string k = "loc_" + c;
+                if (!t.ContainsKey(k)) t[k] = ArteLugares.Frente(c);
+            }
+            return t;
         }
 
         ConstructorMalla M(string clave)
         {
+            string k = clave + chunk;
             ConstructorMalla m;
-            if (!mallas.TryGetValue(clave, out m))
+            if (!mallas.TryGetValue(k, out m))
             {
                 m = clave == "modelos" ? Modelos.Nueva() : new ConstructorMalla();
-                mallas[clave] = m;
+                mallas[k] = m;
             }
             return m;
         }
@@ -85,24 +106,18 @@ namespace Eternauta.Beta
         // ------------------------------------------------------------------
         // LUZ HORNEADA
         // ------------------------------------------------------------------
-        struct Luz { public Vector3 pos; public Vector3 color; public float radio; }
-        static readonly Luz[] Luces =
-        {
-            new Luz { pos = new Vector3(10.6f, 0.75f, -32.6f), color = new Vector3(1.0f, 0.78f, 0.5f), radio = 5.0f },  // lámpara del refugio
-            new Luz { pos = new Vector3(11.3f, 0.65f, -37.4f), color = new Vector3(0.8f, 0.66f, 0.45f), radio = 3.2f },  // lámpara del taller
-            new Luz { pos = new Vector3(26.44f, 0.36f, -21.7f), color = new Vector3(1.0f, 0.7f, 0.38f), radio = 3.8f },  // vela del almacén
-            new Luz { pos = new Vector3(18.5f, 0.9f, -37.5f), color = new Vector3(0.35f, 0.4f, 0.5f), radio = 3.0f },   // ventana del dormitorio
-        };
-
-        public static Vector3 LuzInterior(Vector3 p)
+        public Vector3 LuzInterior(Vector3 p)
         {
             Vector3 l = new Vector3(0.40f, 0.42f, 0.46f);
-            foreach (var luz in Luces)
+            foreach (var luz in datos.luces)
             {
-                float d = Vector3.Distance(p, luz.pos);
-                if (d >= luz.radio) continue;
-                float k = 1f - d / luz.radio;
-                l += luz.color * (k * k * 1.6f);
+                float dx = p.x - luz.x, dy = p.y - luz.h, dz = p.z + luz.y;
+                float r2 = luz.radio * luz.radio;
+                float d2 = dx * dx + dy * dy + dz * dz;
+                if (d2 >= r2) continue;
+                float k = 1f - Mathf.Sqrt(d2) / luz.radio;
+                float f = k * k * 1.6f;
+                l.x += luz.r * f; l.y += luz.g * f; l.z += luz.b * f;
             }
             return l;
         }
@@ -125,6 +140,7 @@ namespace Eternauta.Beta
         // CARAS
         // ------------------------------------------------------------------
         // Rectángulo origen + U*s + V*t. Se da vuelta solo si hace falta para mirar hacia "normal".
+        // Después de dar vuelta, U apunta a la derecha de quien mira la cara: u0 = borde izquierdo.
         static void Cara(ConstructorMalla m, Vector3 origen, Vector3 U, Vector3 V, Vector3 normal, float u0, float u1, float v0, float v1)
         {
             if (Vector3.Dot(Vector3.Cross(V, U), normal) < 0f) { origen += U; U = -U; }
@@ -132,16 +148,31 @@ namespace Eternauta.Beta
                 new Vector2(u0, v0), new Vector2(u0, v1), new Vector2(u1, v1), new Vector2(u1, v0));
         }
 
-        struct Estilo { public string baseTex, altaTex, interiorTex; public float alto; }
+        struct Estilo
+        {
+            public string baseTex, altaTex, interiorTex;
+            public float alto;
+            public int runIdx, runLen;   // posición dentro de la fachada de un local (runLen 0 = textura común)
+        }
+
+        static bool EsLugar(char c) { return "mbicieayruKgf".IndexOf(c) >= 0; }
 
         static Estilo EstiloDe(char c)
         {
             switch (c)
             {
                 case 'H': return new Estilo { baseTex = "revoque", altaTex = "fachada_beige", interiorTex = "empapelado", alto = AltoTechos };
-                case 'P': case 'K': return new Estilo { baseTex = "persiana", altaTex = "fachada_gris", interiorTex = "azulejos", alto = AltoTechos };
-                case 'W': return new Estilo { baseTex = "ventana", altaTex = "ladrillo_liso", interiorTex = "ladrillo_int", alto = AltoTechos };
+                case 'T': return new Estilo { baseTex = "ladrillo", altaTex = "fachada_beige", interiorTex = "empapelado", alto = 4.4f };
+                case 'U': return new Estilo { baseTex = "persiana", altaTex = "fachada_gris", interiorTex = "empapelado", alto = 5.2f };
+                case 'V': return new Estilo { baseTex = "revoque", altaTex = "fachada_ocre", interiorTex = "empapelado", alto = 3.8f };
+                case 'Y': return new Estilo { baseTex = "ladrillo", altaTex = "fachada_blanca", interiorTex = "empapelado", alto = 6.0f };
+                case '#': case 'N': return new Estilo { baseTex = "muro_nieve", altaTex = "muro_nieve", interiorTex = "muro_nieve", alto = 2.3f };
                 case 'C': return new Estilo { baseTex = "hormigon", altaTex = "hormigon", interiorTex = "hormigon", alto = 1.7f };
+                case 'm': case 'b': case 'y': case 'f': case 'g': case 'K': case 'e':
+                    return new Estilo { baseTex = "revoque", altaTex = "fachada_blanca", interiorTex = "azulejos", alto = 3.0f };
+                case 'c': return new Estilo { baseTex = "ladrillo", altaTex = "ladrillo_liso", interiorTex = "ladrillo_int", alto = 3.0f };
+                case 'i': case 'u': case 'a': case 'r':
+                    return new Estilo { baseTex = "revoque", altaTex = "fachada_gris", interiorTex = "empapelado", alto = 3.0f };
                 default: return new Estilo { baseTex = "ladrillo", altaTex = "ladrillo_liso", interiorTex = "ladrillo_int", alto = 3.2f };
             }
         }
@@ -155,7 +186,9 @@ namespace Eternauta.Beta
                 float a = y0, b = Mathf.Min(y1, corte);
                 var m = M(e.baseTex);
                 m.interior = 0f; m.luzExtra = LuzExterior;
-                Cara(m, origen + Vector3.up * a, U, Vector3.up * (b - a), normal, u0, u1, 1f - b / corte, 1f - a / corte);
+                float bu0 = u0, bu1 = u1;
+                if (e.runLen > 0) { bu0 = (e.runIdx + u0) / e.runLen; bu1 = (e.runIdx + u1) / e.runLen; }
+                Cara(m, origen + Vector3.up * a, U, Vector3.up * (b - a), normal, bu0, bu1, 1f - b / corte, 1f - a / corte);
             }
             if (y1 > corte)
             {
@@ -187,13 +220,47 @@ namespace Eternauta.Beta
             }
         }
 
-        char CeldaExt(int x, int y)
+        static int CaraDe(Vector3 normal)
         {
-            if (y < 0) return (x >= 11 && x <= 19) ? 'X' : '~';
-            return mundo.Celda(x, y);
+            if (normal.x < -0.5f) return 0;
+            if (normal.x > 0.5f) return 1;
+            return normal.z > 0f ? 2 : 3;
         }
 
-        static bool Caminable(char c) { return c == '.' || c == '=' || c == ',' || c == ';' || c == 'd' || c == 'X'; }
+        char CeldaExt(int x, int y) { return mundo.Celda(x, y); }
+
+        static bool Caminable(char c)
+        {
+            return c == '.' || c == '=' || c == ',' || c == ';' || c == 'd' || c == ':' || c == 'p';
+        }
+
+        // ¿La celda (x,y) pertenece a la misma fachada (mismo local) vista desde la cara d?
+        bool EnFachada(int x, int y, int d, char letra)
+        {
+            char c = mundo.Celda(x, y);
+            if (c != letra && !Mundo.EsPuerta(c)) return false;
+            int nx = x + DX[d], ny = y + DY[d];
+            return Caminable(mundo.Celda(nx, ny)) && !mundo.Interior(nx, ny);
+        }
+
+        // Estilo de la cara d de un local: si el tramo de pared tiene la puerta, lleva el cartel y las vidrieras.
+        Estilo EstiloLugar(char letra, int cx, int cy, int d)
+        {
+            var e = EstiloDe(letra);
+            int ax = d < 2 ? 0 : 1, ay = d < 2 ? 1 : 0;
+            int x0 = cx, y0 = cy, x1 = cx, y1 = cy;
+            while (EnFachada(x0 - ax, y0 - ay, d, letra)) { x0 -= ax; y0 -= ay; }
+            while (EnFachada(x1 + ax, y1 + ay, d, letra)) { x1 += ax; y1 += ay; }
+            int largo = (x1 - x0) + (y1 - y0) + 1;
+            bool puerta = false;
+            for (int k = 0; k < largo; k++) if (Mundo.EsPuerta(mundo.Celda(x0 + ax * k, y0 + ay * k))) puerta = true;
+            if (!puerta || largo < 3) return e;
+            int pos = (cx - x0) + (cy - y0);
+            e.runIdx = (d == 0 || d == 3) ? pos : largo - 1 - pos;
+            e.runLen = largo;
+            e.baseTex = "loc_" + letra;
+            return e;
+        }
 
         // ------------------------------------------------------------------
         // GENERAR
@@ -203,51 +270,109 @@ namespace Eternauta.Beta
             Modelos.Inicializar();
             GenerarGrilla();
             GenerarPuertas();
-            GenerarDetallesGrilla();
-            GenerarRio();
-            GenerarPuente();
-            GenerarCapital();
-            GenerarHorizonte();
-            GenerarObelisco();
+            if (datos.id == 1) GenerarExteriorAvellaneda();
+            else GenerarExteriorPuente();
+            HornearDecoracion();
             GenerarCielo();
+        }
+
+        // Desplaza en X todo lo que genera "gen" (reutiliza el código del puente y la Capital para cualquier x).
+        void Desplazado(float dx, System.Action gen)
+        {
+            var antes = new Dictionary<ConstructorMalla, int>();
+            foreach (var m in mallas.Values) antes[m] = m.v.Count;
+            int nb = bengalas.Count, nf = fogonazos.Count;
+            gen();
+            foreach (var kv in mallas)
+            {
+                int i0;
+                antes.TryGetValue(kv.Value, out i0);
+                for (int i = i0; i < kv.Value.v.Count; i++) kv.Value.v[i] += new Vector3(dx, 0, 0);
+            }
+            for (int i = nb; i < bengalas.Count; i++) bengalas[i] += new Vector3(dx, 0, 0);
+            for (int i = nf; i < fogonazos.Count; i++) fogonazos[i] += new Vector3(dx, 0, 0);
+        }
+
+        string TexPiso(char c)
+        {
+            switch (c)
+            {
+                case '.': return "nieve";
+                case ':': return "vereda";
+                case 'p': return "plaza";
+                case '=': return "asfalto";
+                case ';': return "baldosas";
+                default: return "madera";
+            }
+        }
+
+        bool EnZonaMuroNorte(int cx, int cy)
+        {
+            return datos.id == 1 && cy <= 1 && Mathf.Abs(cx + 0.5f - datos.llegadaX) <= 7.5f;
         }
 
         void GenerarGrilla()
         {
             for (int cy = 0; cy < mundo.alto; cy++)
-                for (int cx = 0; cx < mundo.ancho; cx++)
+            {
+                // pisos al aire libre: se juntan en tiras a lo largo de la fila
+                int cx = 0;
+                while (cx < mundo.ancho)
                 {
                     char c = mundo.Celda(cx, cy);
+                    bool exteriorPiso = (c == '.' || c == ':' || c == 'p' || c == '=') && !mundo.Interior(cx, cy);
+                    if (!exteriorPiso) { cx++; continue; }
+                    int fin = cx;
+                    while (fin + 1 < mundo.ancho && mundo.Celda(fin + 1, cy) == c && (fin + 1) / Bloque == cx / Bloque) fin++;
+                    chunk = "@" + (cx / Bloque) + "_" + (cy / Bloque);
+                    var m = M(TexPiso(c));
+                    m.interior = 0f; m.luzExtra = LuzExterior;
+                    int n = fin - cx + 1;
+                    Cara(m, new Vector3(cx, 0, -cy - 1), Vector3.right * n, Vector3.forward, Vector3.up, 0, n, 0, 1);
+                    if (cy <= 7 && datos.id == 2 && false) { }
+                    cx = fin + 1;
+                }
+
+                for (cx = 0; cx < mundo.ancho; cx++)
+                {
+                    char c = mundo.Celda(cx, cy);
+                    chunk = EnZonaMuroNorte(cx, cy) ? ClaveMuroNorte : "@" + (cx / Bloque) + "_" + (cy / Bloque);
                     bool interior = mundo.Interior(cx, cy);
                     var p0 = new Vector3(cx, 0, -cy - 1);
 
                     if (Caminable(c) || c == 'D')
                     {
-                        // Piso
-                        string tex = c == '=' || c == 'X' ? "asfalto" : (c == ';' ? "baldosas" : (c == '.' ? "nieve" : "madera"));
-                        var m = M(tex);
+                        if (c == '.' || c == ':' || c == 'p' || c == '=')
+                        {
+                            if (datos.hayPuente && (c == '=') && cy >= datos.puenteY0 && cy <= datos.puenteY1) DebajoPuente(cx, cy);
+                            continue;   // ya está en las tiras
+                        }
+                        var m = M(TexPiso(c));
                         m.interior = interior ? 1f : 0f;
                         m.luzExtra = interior ? (System.Func<Vector3, Vector3>)LuzInterior : LuzExterior;
                         Cara(m, p0, Vector3.right, Vector3.forward, Vector3.up, 0, 1, 0, 1);
                         if (interior)
                         {
-                            // Techo (desde adentro) y techo nevado (desde afuera)
                             var t = M("techo");
                             t.interior = 1f; t.luzExtra = LuzInterior;
                             Cara(t, p0 + Vector3.up * AltoInterior, Vector3.right, Vector3.forward, Vector3.down, 0, 1, 0, 1);
-                            var n = M("nieve");
-                            n.interior = 0f; n.luzExtra = LuzExterior;
-                            Cara(n, p0 + Vector3.up * AltoTechos, Vector3.right, Vector3.forward, Vector3.up, 0, 1, 0, 1);
                         }
-                        if (cy <= 7 && c != '.') DebajoPuente(cx, cy);
                         continue;
                     }
 
                     if (c == '~') continue;
                     if (c == 'B') { Baranda(cx, cy); continue; }
 
+                    // Piso debajo de los muros de nieve que se pueden sacar (cinemática del puente)
+                    if (EnZonaMuroNorte(cx, cy))
+                    {
+                        var pm = M("nieve"); pm.interior = 0f; pm.luzExtra = LuzExterior;
+                        Cara(pm, p0, Vector3.right, Vector3.forward, Vector3.up, 0, 1, 0, 1);
+                    }
+
                     // Pared
-                    var e = EstiloDe(c);
+                    var e0 = EstiloDe(c);
+                    bool lugar = EsLugar(c);
                     for (int d = 0; d < 4; d++)
                     {
                         char n = CeldaExt(cx + DX[d], cy + DY[d]);
@@ -255,29 +380,37 @@ namespace Eternauta.Beta
                         Vector3 origen, U, normal;
                         Borde(cx, cy, d, out origen, out U, out normal);
                         if (mundo.Interior(cx + DX[d], cy + DY[d]))
-                            ParedInterior(origen, U, normal, 0f, AltoInterior, e, 0, 1);
+                            ParedInterior(origen, U, normal, 0f, AltoInterior, e0, 0, 1);
                         else
                         {
+                            var e = lugar ? EstiloLugar(c, cx, cy, d) : e0;
                             ParedExterior(origen, U, normal, 0f, e.alto, e, 0, 1);
-                            if (n == '.') MonticuloNieve(origen, U, normal);
+                            if (n == '.' && c != '#' && c != 'N') MonticuloNieve(origen, U, normal);
+                            if (n == '~') Murallon(origen, U, normal);
                         }
                     }
-                    // Tope nevado
-                    var top = M("nieve");
-                    top.interior = 0f; top.luzExtra = LuzExterior;
-                    Cara(top, p0 + Vector3.up * e.alto, Vector3.right, Vector3.forward, Vector3.up, 0, 1, 0, 1);
-                    // Costados del tope si la pared vecina es más baja (p. ej. pilar 'C' junto a una casa)
+                    // Costados altos si la pared vecina es más baja (p. ej. pilar 'C' junto a una casa)
                     for (int d = 0; d < 4; d++)
                     {
                         char n = CeldaExt(cx + DX[d], cy + DY[d]);
                         if (Caminable(n) || n == '~' || n == 'B' || Mundo.EsPuerta(n)) continue;
                         float altoVecino = EstiloDe(n).alto;
-                        if (altoVecino >= e.alto) continue;
+                        if (altoVecino >= e0.alto) continue;
                         Vector3 origen, U, normal;
                         Borde(cx, cy, d, out origen, out U, out normal);
-                        ParedExterior(origen, U, normal, altoVecino, e.alto, e, 0, 1);
+                        ParedExterior(origen, U, normal, altoVecino, e0.alto, e0, 0, 1);
                     }
                 }
+            }
+            chunk = "";
+        }
+
+        // Pared de hormigón que baja hasta el agua.
+        void Murallon(Vector3 origen, Vector3 U, Vector3 normal)
+        {
+            var h = M("hormigon_osc");
+            h.interior = 0f; h.luzExtra = LuzExterior;
+            Cara(h, origen + Vector3.up * (NivelAgua - 0.2f), U, Vector3.up * (-NivelAgua + 0.2f), normal, 0, 1, 0, 3.2f);
         }
 
         void MonticuloNieve(Vector3 origen, Vector3 U, Vector3 normal)
@@ -308,7 +441,7 @@ namespace Eternauta.Beta
                 char n = CeldaExt(cx + DX[d], cy + DY[d]);
                 Vector3 origen, U, normal;
                 Borde(cx, cy, d, out origen, out U, out normal);
-                if (n == '=' || n == 'X' || n == '.')
+                if (n == '=' || n == '.' || n == ':')
                 {
                     var h = M("hormigon"); h.interior = 0f; h.luzExtra = LuzExterior;
                     Cara(h, origen, U, Vector3.up * alto, normal, 0, 1, 0, alto);
@@ -321,7 +454,7 @@ namespace Eternauta.Beta
                     Rejas(a, a + U, true);
                 }
             }
-            if (cy <= 7) DebajoPuente(cx, cy);
+            if (datos.hayPuente) DebajoPuente(cx, cy);
         }
 
         // Baranda de hierro entre dos puntos (a la altura de la vereda).
@@ -396,6 +529,8 @@ namespace Eternauta.Beta
 
                     char vecinoPared = latX ? mundo.Celda(cx - 1, cy) : mundo.Celda(cx, cy - 1);
                     var e = EstiloDe(vecinoPared);
+                    if (EsLugar(vecinoPared)) e = EstiloLugar(vecinoPared, cx, cy, CaraDe(-dirPaso));
+                    chunk = "@" + (cx / Bloque) + "_" + (cy / Bloque);
                     float M0 = Mundo.MarcoPuerta, M1 = 1f - Mundo.MarcoPuerta;
 
                     // Cara exterior (mira hacia -dirPaso)
@@ -405,6 +540,7 @@ namespace Eternauta.Beta
                     ParedExterior(o + L * M0, L * (M1 - M0), nExt, AltoPuerta, e.alto, e, M0, M1);
                     // Cara interior (del lado de adentro, a 1 de profundidad)
                     Vector3 oi = o + dirPaso;
+                    e.runLen = 0;
                     ParedInterior(oi, L * M0, dirPaso, 0f, AltoInterior, e, 0f, M0);
                     ParedInterior(oi + L * M1, L * M0, dirPaso, 0f, AltoInterior, e, M1, 1f);
                     ParedInterior(oi + L * M0, L * (M1 - M0), dirPaso, AltoPuerta, AltoInterior, e, M0, M1);
@@ -437,116 +573,36 @@ namespace Eternauta.Beta
         // Giro en Y (grados) que lleva el eje +X local hacia la dirección d.
         static float Yaw(Vector3 d) { return Mathf.Atan2(-d.z, d.x) * Mathf.Rad2Deg; }
 
-        // ------------------------------------------------------------------
-        // DETALLES 3D DE LA GRILLA: carteles, ventanas tapiadas, pórtico del puente
-        // ------------------------------------------------------------------
-        void GenerarDetallesGrilla()
-        {
-            var m = M("modelos");
-            m.interior = 0f; m.luzExtra = LuzExterior;
-            for (int cy = 0; cy < mundo.alto; cy++)
-                for (int cx = 0; cx < mundo.ancho; cx++)
-                {
-                    char c = mundo.Celda(cx, cy);
-                    if (c != 'K' && c != 'W') continue;
-                    for (int d = 0; d < 4; d++)
-                    {
-                        char n = CeldaExt(cx + DX[d], cy + DY[d]);
-                        if (n != '.' && n != '~') continue;
-                        Vector3 origen, U, normal;
-                        Borde(cx, cy, d, out origen, out U, out normal);
-                        if (c == 'K')
-                        {
-                            // Cartel del almacén: caja que sobresale de la fachada
-                            var centro = origen + U * 0.5f + normal * 0.05f + Vector3.up * 1.48f;
-                            m.Push();
-                            m.Mover(centro);
-                            m.RotarY(Yaw(U));
-                            var r = Modelos.atlas["cartel_almacen"];
-                            m.Caja(Vector3.zero, new Vector3(0.94f, 0.24f, 0.08f), ConstructorMalla.Col(200, 200, 200), null, null);
-                            m.Pop();
-                            // la cara con texto (hacia afuera)
-                            Cara(m, centro - U * 0.47f + normal * 0.041f + Vector3.down * 0.12f, U * 0.94f, Vector3.up * 0.24f, normal, r.u0, r.u1, r.v0, r.v1);
-                            m.Caja(centro + Vector3.up * 0.13f, new Vector3(Mathf.Abs(U.x) * 0.95f + Mathf.Abs(normal.x) * 0.09f, 0.025f, Mathf.Abs(U.z) * 0.95f + Mathf.Abs(normal.z) * 0.09f), ConstructorMalla.ColNieve);
-                        }
-                        else
-                        {
-                            // Tablas clavadas sobre la ventana
-                            var madera = ConstructorMalla.Col(122, 90, 56);
-                            for (int k = 0; k < 3; k++)
-                            {
-                                float y = 0.42f + k * 0.2f + (float)rnd.NextDouble() * 0.05f;
-                                float inc = ((float)rnd.NextDouble() - 0.5f) * 0.12f;
-                                var a = origen + U * 0.12f + normal * 0.03f + Vector3.up * (y + inc);
-                                var b = origen + U * 0.88f + normal * 0.03f + Vector3.up * (y - inc);
-                                m.Barra(a, b, 0.09f, Var(madera, rnd.Next(-14, 14)));
-                            }
-                        }
-                    }
-                }
-
-            // Pórtico con el cartel del puente sobre la entrada (entre los pilares 'C')
-            var verde = ConstructorMalla.Col(22, 92, 52);
-            var acero = ConstructorMalla.Col(70, 80, 84);
-            float zc = -8.5f;
-            m.Cilindro(new Vector3(10.5f, 1.7f, zc), 0.09f, 0.08f, 1.25f, 8, acero);
-            m.Cilindro(new Vector3(20.5f, 1.7f, zc), 0.09f, 0.08f, 1.25f, 8, acero);
-            m.Barra(new Vector3(10.4f, 2.85f, zc), new Vector3(20.6f, 2.85f, zc), 0.12f, acero);
-            m.Barra(new Vector3(10.4f, 2.62f, zc), new Vector3(20.6f, 2.62f, zc), 0.07f, acero);
-            for (float x = 10.8f; x < 20.4f; x += 0.8f)
-                m.Barra(new Vector3(x, 2.62f, zc), new Vector3(x + 0.4f, 2.85f, zc), 0.04f, acero);
-            var rc = Modelos.atlas["cartel_puente"];
-            var cs = new Vector3(15.5f, 2.15f, zc - 0.03f);
-            m.Caja(cs + new Vector3(0, 0, 0.05f), new Vector3(5.6f, 1.0f, 0.08f), verde);
-            Cara(m, cs + new Vector3(-2.8f, -0.5f, 0), Vector3.right * 5.6f, Vector3.up * 1.0f, Vector3.back, rc.u0, rc.u1, rc.v0, rc.v1);
-            m.Caja(cs + new Vector3(0, 0.52f, 0.05f), new Vector3(5.62f, 0.04f, 0.1f), ConstructorMalla.ColNieve);
-            m.Barra(new Vector3(13f, 2.65f, zc + 0.02f), new Vector3(13f, 2.85f, zc), 0.05f, acero);
-            m.Barra(new Vector3(18f, 2.65f, zc + 0.02f), new Vector3(18f, 2.85f, zc), 0.05f, acero);
-        }
-
         static Color32 Var(Color32 c, int d) { return ConstructorMalla.Col(c.r + d, c.g + d, c.b + d); }
 
         // ------------------------------------------------------------------
         // RIACHUELO Y COSTAS
         // ------------------------------------------------------------------
-        void GenerarRio()
+        // Agua entre las dos costas (z0 = costa sur, z1 = costa norte), con murallones y hielo flotando.
+        void GenerarRio(float x0, float x1, float z0, float z1, bool murallones)
         {
-            const float x0 = -170f, x1 = 200f;
+            chunk = "";
             var agua = M("agua");
             agua.interior = 0f; agua.luzExtra = p => new Vector3(0.8f, 0.82f, 0.86f);
             for (float x = x0; x < x1; x += 10f)
-                Cara(agua, new Vector3(x, NivelAgua, OrillaSur), Vector3.right * 10f, Vector3.forward * (OrillaNorte - OrillaSur), Vector3.up, 0, 10f / 4f, 0, (OrillaNorte - OrillaSur) / 4f);
-            // Murallones de las costas
-            var h = M("hormigon_osc");
-            h.interior = 0f; h.luzExtra = LuzExterior;
-            for (float x = x0; x < x1; x += 10f)
+                Cara(agua, new Vector3(x, NivelAgua, z0), Vector3.right * 10f, Vector3.forward * (z1 - z0), Vector3.up, 0, 10f / 4f, 0, (z1 - z0) / 4f);
+            if (murallones)
             {
-                Cara(h, new Vector3(x, NivelAgua - 0.2f, OrillaSur), Vector3.right * 10f, Vector3.up * (-NivelAgua + 0.2f), Vector3.forward, 0, 10, 0, 3.2f);
-                Cara(h, new Vector3(x, NivelAgua - 0.2f, OrillaNorte), Vector3.right * 10f, Vector3.up * (-NivelAgua + 0.2f), Vector3.back, 0, 10, 0, 3.2f);
+                var h = M("hormigon_osc");
+                h.interior = 0f; h.luzExtra = LuzExterior;
+                for (float x = x0; x < x1; x += 10f)
+                {
+                    Cara(h, new Vector3(x, NivelAgua - 0.2f, z0), Vector3.right * 10f, Vector3.up * (-NivelAgua + 0.2f), Vector3.forward, 0, 10, 0, 3.2f);
+                    Cara(h, new Vector3(x, NivelAgua - 0.2f, z1), Vector3.right * 10f, Vector3.up * (-NivelAgua + 0.2f), Vector3.back, 0, 10, 0, 3.2f);
+                }
             }
-            // Costa sur fuera del mapa jugable: galpones y depósitos a los costados
             var mod = M("modelos");
             mod.interior = 0f; mod.luzExtra = LuzExterior;
-            for (float x = x0; x < x1;)
-            {
-                float ancho = 5f + (float)rnd.NextDouble() * 9f;
-                if (x + ancho > -1f && x < 32f) { x = 32f; continue; }
-                float alto = 1.6f + (float)rnd.NextDouble() * 3.5f;
-                float prof = 4f + (float)rnd.NextDouble() * 5f;
-                Edificio(new Vector3(x + ancho * 0.5f, 0, OrillaSur - 0.5f - prof * 0.5f), ancho - 0.6f, prof, alto, true);
-                x += ancho;
-            }
-            // Piso nevado de la orilla sur fuera del mapa (para que no quede vacío)
-            var nieve = M("nieve");
-            nieve.interior = 0f; nieve.luzExtra = LuzExterior;
-            Cara(nieve, new Vector3(x0, 0, -30f), Vector3.right * (0f - x0), Vector3.forward * (30f + OrillaSur), Vector3.up, 0, (0f - x0) / 2f, 0, (30f + OrillaSur) / 2f);
-            Cara(nieve, new Vector3(31f, 0, -30f), Vector3.right * (x1 - 31f), Vector3.forward * (30f + OrillaSur), Vector3.up, 0, (x1 - 31f) / 2f, 0, (30f + OrillaSur) / 2f);
-            // Hielo flotando
             for (int i = 0; i < 70; i++)
             {
                 float x = x0 + 40f + (float)rnd.NextDouble() * (x1 - x0 - 80f);
-                float z = OrillaSur + 1f + (float)rnd.NextDouble() * (OrillaNorte - OrillaSur - 2f);
-                if (x > 10f && x < 21f) continue;
+                float z = z0 + 1f + (float)rnd.NextDouble() * (z1 - z0 - 2f);
+                if (x > datos.puenteX0 - 2f && x < datos.puenteX1 + 3f && datos.id == 2) continue;
                 mod.Push(); mod.Mover(x, NivelAgua + 0.02f, z); mod.RotarY((float)rnd.NextDouble() * 360f);
                 mod.Caja(Vector3.zero, new Vector3(0.6f + (float)rnd.NextDouble() * 1.6f, 0.08f, 0.5f + (float)rnd.NextDouble() * 1.2f), ConstructorMalla.Col(206, 214, 224));
                 mod.Pop();
@@ -554,49 +610,53 @@ namespace Eternauta.Beta
         }
 
         // ------------------------------------------------------------------
-        // PUENTE PUEYRREDÓN (continúa hacia el norte hasta la otra costa)
+        // PUENTE PUEYRREDÓN: arco de acero, pilas y vigas (la calzada puede venir de la grilla)
         // ------------------------------------------------------------------
-        void GenerarPuente()
+        // xOeste..xEste = ancho de la losa; z0..z1 = tramo sobre el agua (z0 < z1).
+        void GenerarPuente(float xOeste, float xEste, float z0, float z1, bool conCalzada)
         {
-            float z0 = 0f, z1 = OrillaNorte;
+            chunk = "";
             float largo = z1 - z0;
-            // calzada
-            var asf = M("asfalto"); asf.interior = 0f; asf.luzExtra = LuzExterior;
-            for (float z = z0; z < z1; z += 1f)
-                for (int x = 12; x < 19; x++)
-                    Cara(asf, new Vector3(x, 0, z), Vector3.right, Vector3.forward, Vector3.up, 0, 1, 0, 1);
-            // veredas, cordones y bordes de la losa
-            var ver = M("vereda"); ver.interior = 0f; ver.luzExtra = LuzExterior;
-            var hor = M("hormigon"); hor.interior = 0f; hor.luzExtra = LuzExterior;
-            var hos = M("hormigon_osc"); hos.interior = 0f; hos.luzExtra = LuzExterior;
-            foreach (var xv in new[] { BordeOeste, BordeEste - 1f })
+            float xc = (xOeste + xEste) * 0.5f;
+            if (conCalzada)
             {
-                Cara(ver, new Vector3(xv, 0.08f, z0), Vector3.right, Vector3.forward * largo, Vector3.up, 0, 1, 0, largo);
-                bool oeste = xv < 15f;
-                Cara(hor, new Vector3(oeste ? xv + 1f : xv, 0, z0), Vector3.forward * largo, Vector3.up * 0.08f, oeste ? Vector3.right : Vector3.left, 0, largo, 0, 0.08f);
-                Cara(hor, new Vector3(oeste ? xv : xv + 1f, -0.7f, z0), Vector3.forward * largo, Vector3.up * 0.78f, oeste ? Vector3.left : Vector3.right, 0, largo, 0, 0.78f);
-                float xr = oeste ? xv + 0.1f : xv + 0.9f;
-                for (float z = z0; z < z1; z += 2f) Rejas(new Vector3(xr, 0.08f, z), new Vector3(xr, 0.08f, z + 2f), true);
+                var asf = M("asfalto"); asf.interior = 0f; asf.luzExtra = LuzExterior;
+                for (float z = z0; z < z1; z += 1f)
+                    for (float x = xOeste + 1f; x < xEste - 1f; x += 1f)
+                        Cara(asf, new Vector3(x, 0, z), Vector3.right, Vector3.forward, Vector3.up, 0, 1, 0, 1);
+                var ver = M("vereda"); ver.interior = 0f; ver.luzExtra = LuzExterior;
+                var hor = M("hormigon"); hor.interior = 0f; hor.luzExtra = LuzExterior;
+                var hos = M("hormigon_osc"); hos.interior = 0f; hos.luzExtra = LuzExterior;
+                foreach (var xv in new[] { xOeste, xEste - 1f })
+                {
+                    Cara(ver, new Vector3(xv, 0.08f, z0), Vector3.right, Vector3.forward * largo, Vector3.up, 0, 1, 0, largo);
+                    bool oeste = xv < xc;
+                    Cara(hor, new Vector3(oeste ? xv + 1f : xv, 0, z0), Vector3.forward * largo, Vector3.up * 0.08f, oeste ? Vector3.right : Vector3.left, 0, largo, 0, 0.08f);
+                    Cara(hor, new Vector3(oeste ? xv : xv + 1f, -0.7f, z0), Vector3.forward * largo, Vector3.up * 0.78f, oeste ? Vector3.left : Vector3.right, 0, largo, 0, 0.78f);
+                    float xr = oeste ? xv + 0.1f : xv + 0.9f;
+                    for (float z = z0; z < z1; z += 2f) Rejas(new Vector3(xr, 0.08f, z), new Vector3(xr, 0.08f, z + 2f), true);
+                }
+                Cara(hos, new Vector3(xOeste, -0.7f, z0), Vector3.right * (xEste - xOeste), Vector3.forward * largo, Vector3.down, 0, xEste - xOeste, 0, largo);
             }
-            Cara(hos, new Vector3(BordeOeste, -0.7f, z0), Vector3.right * (BordeEste - BordeOeste), Vector3.forward * largo, Vector3.down, 0, 9, 0, largo);
 
             var mod = M("modelos"); mod.interior = 0f; mod.luzExtra = LuzExterior;
             var acero = ConstructorMalla.Col(78, 94, 96);
             var aceroOsc = ConstructorMalla.Col(56, 66, 68);
             // vigas debajo de la losa
-            foreach (var x in new[] { 12.5f, 15.5f, 18.5f })
-                mod.Caja(new Vector3(x, -1.0f, (z0 + z1) * 0.5f), new Vector3(0.4f, 0.6f, largo + 8f), ConstructorMalla.Col(110, 108, 104));
+            foreach (var x in new[] { xc - 3f, xc, xc + 3f })
+                mod.Caja(new Vector3(x, -1.0f, (z0 + z1) * 0.5f), new Vector3(0.4f, 0.6f, largo + 2f), ConstructorMalla.Col(110, 108, 104));
             // pilas en el agua
-            foreach (var z in new[] { -4f, 6f, 16f, 26f })
+            foreach (var z in new[] { z0 + 3f, z0 + 11f, z0 + 19f, z0 + 27f })
             {
-                mod.Caja(new Vector3(15.5f, (NivelAgua - 1.3f) * 0.5f - 0.4f, z), new Vector3(8.4f, 0.5f, 1.4f), ConstructorMalla.Col(104, 102, 98));
-                foreach (var x in new[] { 12.6f, 18.4f })
+                if (z > z1 - 1f) continue;
+                mod.Caja(new Vector3(xc, (NivelAgua - 1.3f) * 0.5f - 0.4f, z), new Vector3(xEste - xOeste - 0.6f, 0.5f, 1.4f), ConstructorMalla.Col(104, 102, 98));
+                foreach (var x in new[] { xc - 2.9f, xc + 2.9f })
                     mod.Cilindro(new Vector3(x, NivelAgua - 0.4f, z), 0.55f, 0.48f, -NivelAgua - 0.6f, 8, ConstructorMalla.Col(112, 110, 104));
             }
             // Arco de acero (puente de arco con tensores) sobre la calzada
-            float za = 2f, zb = 28f, altoArco = 4.6f;
+            float za = z0 + 2f, zb = z1 - 2f, altoArco = 4.6f;
             int seg = 18;
-            foreach (var x in new[] { BordeOeste + 0.15f, BordeEste - 0.15f })
+            foreach (var x in new[] { xOeste + 0.15f, xEste - 0.15f })
             {
                 Vector3 prev = new Vector3(x, 0.08f, za);
                 for (int i = 1; i <= seg; i++)
@@ -606,7 +666,6 @@ namespace Eternauta.Beta
                     mod.Barra(prev, p, 0.28f, acero);
                     prev = p;
                 }
-                // tensores verticales
                 for (int i = 1; i < 13; i++)
                 {
                     float t = i / 13f;
@@ -614,9 +673,7 @@ namespace Eternauta.Beta
                     var b = new Vector3(x, 0.6f, Mathf.Lerp(za, zb, t));
                     mod.Barra(b, b + Vector3.up * (h - 0.6f), 0.05f, aceroOsc);
                 }
-                // viga de borde
                 mod.Barra(new Vector3(x, 0.45f, za - 0.4f), new Vector3(x, 0.45f, zb + 0.4f), 0.22f, aceroOsc);
-                // nieve sobre el arco
                 for (int i = 2; i < seg - 1; i++)
                 {
                     float t = (i + 0.5f) / seg;
@@ -624,30 +681,111 @@ namespace Eternauta.Beta
                     if (Mathf.Abs(t - 0.5f) < 0.3f) mod.Caja(p, new Vector3(0.24f, 0.05f, (zb - za) / seg), ConstructorMalla.ColNieve);
                 }
             }
-            // arriostramiento entre los dos arcos (solo donde es bien alto)
             for (int i = 4; i <= 14; i += 2)
             {
                 float t = i / (float)seg;
                 float h = 0.08f + Mathf.Sin(t * Mathf.PI) * altoArco;
                 float z = Mathf.Lerp(za, zb, t);
-                mod.Barra(new Vector3(BordeOeste + 0.15f, h, z), new Vector3(BordeEste - 0.15f, h, z), 0.14f, acero);
+                mod.Barra(new Vector3(xOeste + 0.15f, h, z), new Vector3(xEste - 0.15f, h, z), 0.14f, acero);
                 if (i < 14)
                 {
                     float t2 = (i + 2) / (float)seg;
                     float h2 = 0.08f + Mathf.Sin(t2 * Mathf.PI) * altoArco;
-                    mod.Barra(new Vector3(BordeOeste + 0.15f, h, z), new Vector3(BordeEste - 0.15f, h2, Mathf.Lerp(za, zb, t2)), 0.07f, aceroOsc);
+                    mod.Barra(new Vector3(xOeste + 0.15f, h, z), new Vector3(xEste - 0.15f, h2, Mathf.Lerp(za, zb, t2)), 0.07f, aceroOsc);
                 }
             }
-            // farolas a lo largo del puente
-            for (float z = 4f; z < z1; z += 7f)
+            if (conCalzada)
             {
-                PonerModelo("farola", new Vector3(BordeOeste + 0.5f, 0.08f, z), -90f, 70 + (int)z);
-                PonerModelo("farola", new Vector3(BordeEste - 0.5f, 0.08f, z + 3.5f), 90f, 90 + (int)z);
+                for (float z = z0 + 4f; z < z1; z += 7f)
+                {
+                    Hornear("farola", 70 + (int)z, xOeste + 0.5f, -z, -90f, false);
+                    Hornear("farola", 90 + (int)z, xEste - 0.5f, -(z + 3.5f), 90f, false);
+                }
+                Hornear("auto_nevado", 501, xc - 1.9f, -(z0 + 9f), 82f, false);
+                Hornear("auto_volcado", 502, xc + 2.1f, -(z0 + 17f), 105f, false);
+                Hornear("auto_nevado", 503, xc - 1.3f, -(z0 + 24.5f), 95f, false);
             }
-            // autos abandonados sobre el puente
-            PonerModelo("auto_nevado", new Vector3(13.6f, 0, 9f), 82f, 501);
-            PonerModelo("auto_volcado", new Vector3(17.6f, 0, 17f), 105f, 502);
-            PonerModelo("auto_nevado", new Vector3(14.2f, 0, 24.5f), 95f, 503);
+        }
+
+        // Coloca un modelo (decoración) pegado a la malla estática, con la luz del lugar donde está.
+        // y = fila de la grilla (el eje Z del mundo es -y).
+        void Hornear(string nombre, int semilla, float x, float y, float giro, bool interior)
+        {
+            var mod = M("modelos");
+            var modelo = Modelos.Crear(nombre, semilla);
+            int i0 = mod.v.Count;
+            mod.Push();
+            mod.Mover(new Vector3(x, 0, -y));
+            mod.RotarY(giro);
+            mod.Unir(modelo.malla);
+            foreach (var p in modelo.partes) { mod.Push(); mod.Mover(p.pivote); mod.Unir(p.malla); mod.Pop(); }
+            mod.Pop();
+            for (int i = i0; i < mod.v.Count; i++)
+            {
+                var u2 = mod.uv2[i];
+                if (u2.y > 0.5f) continue;                      // lo que brilla no se oscurece
+                var l = interior ? LuzInterior(mod.v[i]) : LuzExterior(mod.v[i]) * 1.06f;
+                var c = mod.col[i];
+                mod.col[i] = new Color32(Lienzo.B((int)(c.r * l.x)), Lienzo.B((int)(c.g * l.y)), Lienzo.B((int)(c.b * l.z)), 255);
+                mod.uv2[i] = new Vector2(interior ? 1f : 0f, u2.y);
+            }
+        }
+
+        // Pega a la malla todos los objetos de decoración que no se mueven ni se interactúan.
+        void HornearDecoracion()
+        {
+            foreach (var e in mundo.entidades)
+            {
+                var def = e.def;
+                if (def.tipo != TipoEntidad.Decoracion || def.sprite == "vela" || def.sprite == "semaforo") continue;
+                chunk = "@" + (Mathf.FloorToInt(e.x) / Bloque) + "_" + (Mathf.FloorToInt(e.y) / Bloque);
+                Hornear(def.sprite, def.id, e.x, e.y, def.angulo, mundo.Interior(e.x, e.y));
+                horneadas.Add(def.id);
+            }
+            chunk = "";
+        }
+
+        // Lado de Avellaneda: el río, el puente y la Capital con el Obelisco al fondo, todo al norte del muro.
+        void GenerarExteriorAvellaneda()
+        {
+            float dx = datos.llegadaX - 15.5f;
+            posObelisco = obeliscoLocal + new Vector3(dx, 0, 0);
+            hayObelisco = true;
+            Desplazado(dx, () =>
+            {
+                GenerarRio(-170f, 200f, 0f, OrillaNorte, true);
+                GenerarPuente(11f, 20f, 0f, OrillaNorte, true);
+                GenerarCapital();
+            });
+            GenerarObelisco();
+            GenerarHorizonteAvellaneda();
+        }
+
+        // Mapa del capítulo 2: el río alrededor del puente y la avenida con el Obelisco en el centro.
+        void GenerarExteriorPuente()
+        {
+            float z0 = -(datos.puenteY1 + 1), z1 = -datos.puenteY0;
+            GenerarRio(-120f, 180f, z0, z1, false);
+            // costas: murallones de las orillas de la ciudad
+            var h = M("hormigon_osc"); h.interior = 0f; h.luzExtra = LuzExterior;
+            foreach (var par in new[] { new Vector2(z0, 1f), new Vector2(z1, -1f) })
+            {
+                Vector3 nrm = par.y > 0 ? Vector3.forward : Vector3.back;
+                Cara(h, new Vector3(0, NivelAgua - 0.2f, par.x), Vector3.right * datos.ancho, Vector3.up * (-NivelAgua + 0.2f), nrm, 0, datos.ancho, 0, 3.2f);
+            }
+            GenerarPuente(datos.puenteX0, datos.puenteX1 + 1f, z0, z1, false);
+            posObelisco = new Vector3(datos.obeliscoX, 0, -datos.obeliscoY);
+            hayObelisco = true;
+            GenerarObelisco();
+            // luces rojas y disparos de la batalla alrededor de la plaza del Obelisco
+            for (int i = 0; i < 6; i++)
+            {
+                float a = (float)rnd.NextDouble() * Mathf.PI * 2f;
+                fogonazos.Add(posObelisco + new Vector3(Mathf.Cos(a) * (6f + (float)rnd.NextDouble() * 6f), 0.5f + (float)rnd.NextDouble() * 1.2f, Mathf.Sin(a) * (6f + (float)rnd.NextDouble() * 6f)));
+            }
+            bengalas.Add(posObelisco + new Vector3(-10f, 2.5f, -12f));
+            bengalas.Add(posObelisco + new Vector3(12f, 3.5f, -4f));
+            GenerarHorizontePuente();
         }
 
         // Coloca un modelo del juego dentro de la malla estática (decorado lejano).
@@ -776,7 +914,7 @@ namespace Eternauta.Beta
             // Plaza del Obelisco: vallas, bolsas de arena y camiones del Ejército
             var mod = M("modelos"); mod.interior = 0f; mod.luzExtra = LuzExterior;
             Color32 arena = ConstructorMalla.Col(150, 136, 100), oliva = ConstructorMalla.Col(72, 82, 56);
-            var o = PosObelisco;
+            var o = obeliscoLocal;
             for (int i = 0; i < 22; i++)
             {
                 float a = i / 22f * Mathf.PI * 2f;
@@ -813,11 +951,11 @@ namespace Eternauta.Beta
             for (float x = -40f; x < 70f;)
             {
                 float ancho = 7f + (float)rnd.NextDouble() * 9f;
-                Edificio(new Vector3(x + ancho * 0.5f, 0, PosObelisco.z + 30f + (float)rnd.NextDouble() * 6f), ancho - 0.8f, 10f, 6f + (float)rnd.NextDouble() * 10f, true);
+                Edificio(new Vector3(x + ancho * 0.5f, 0, obeliscoLocal.z + 30f + (float)rnd.NextDouble() * 6f), ancho - 0.8f, 10f, 6f + (float)rnd.NextDouble() * 10f, true);
                 x += ancho;
             }
             foreach (var lado in new[] { -1, 1 })
-                for (float z = PosObelisco.z - 14f; z < PosObelisco.z + 26f;)
+                for (float z = obeliscoLocal.z - 14f; z < obeliscoLocal.z + 26f;)
                 {
                     float frente = 7f + (float)rnd.NextDouble() * 8f;
                     float xc = lado < 0 ? -10f : 41f;
@@ -860,25 +998,36 @@ namespace Eternauta.Beta
             b.Caja(new Vector3(0, 0.12f, 0), new Vector3(baseA + 0.3f, 0.24f, baseA + 0.3f), ConstructorMalla.Col(170, 168, 160));
         }
 
-        // Ciudad lejana alrededor del mapa (siluetas en la niebla).
-        void GenerarHorizonte()
+        // Ciudad lejana alrededor del mapa (siluetas en la niebla). Se ve por encima de los muros de nieve.
+        void Horizonte(Vector3 centro, float rMin, float rMax, int cantidad, System.Func<Vector3, bool> descartar)
         {
+            chunk = "";
             var mod = M("modelos"); mod.interior = 0f; mod.luzExtra = LuzExterior;
-            var centro = new Vector3(15.5f, 0, -24f);
-            for (int i = 0; i < 120; i++)
+            var r0 = new System.Random(77);
+            for (int i = 0; i < cantidad; i++)
             {
-                float a = (float)rnd.NextDouble() * Mathf.PI * 2f;
+                float a = (float)r0.NextDouble() * Mathf.PI * 2f;
                 var dir = new Vector3(Mathf.Cos(a), 0, Mathf.Sin(a));
-                float r = 45f + (float)rnd.NextDouble() * 60f;
+                float r = rMin + (float)r0.NextDouble() * (rMax - rMin);
                 var p = centro + dir * r;
-                if (p.z > OrillaSur - 6f) continue; // del lado del río ya hay ciudad
-                float w = 5f + (float)rnd.NextDouble() * 10f, d = 5f + (float)rnd.NextDouble() * 10f, h = 4f + (float)rnd.NextDouble() * 12f;
-                var gris = (byte)(96 + rnd.Next(40));
-                mod.Push(); mod.Mover(p); mod.RotarY((float)rnd.NextDouble() * 90f);
+                if (descartar(p)) continue;
+                float w = 5f + (float)r0.NextDouble() * 10f, d = 5f + (float)r0.NextDouble() * 10f, h = 5f + (float)r0.NextDouble() * 14f;
+                var gris = (byte)(96 + r0.Next(40));
+                mod.Push(); mod.Mover(p); mod.RotarY((float)r0.NextDouble() * 90f);
                 mod.Caja(new Vector3(0, h * 0.5f, 0), new Vector3(w, h, d), new Color32(gris, gris, (byte)(gris + 6), 255));
                 mod.Caja(new Vector3(0, h + 0.1f, 0), new Vector3(w + 0.1f, 0.2f, d + 0.1f), ConstructorMalla.ColNieve);
                 mod.Pop();
             }
+        }
+
+        void GenerarHorizonteAvellaneda()
+        {
+            Horizonte(new Vector3(datos.ancho * 0.5f, 0, -datos.alto * 0.5f), 100f, 190f, 190, p => p.z > 1f);
+        }
+
+        void GenerarHorizontePuente()
+        {
+            Horizonte(new Vector3(datos.ancho * 0.5f, 0, -datos.alto * 0.5f), 70f, 170f, 150, p => p.x > -4f && p.x < datos.ancho + 4f && p.z > -datos.alto - 4f && p.z < 4f);
         }
 
         // Cúpula del cielo (la mueve la cámara para que siempre quede alrededor).

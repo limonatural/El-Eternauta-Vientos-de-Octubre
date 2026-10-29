@@ -12,7 +12,8 @@ namespace Eternauta.Beta
         W, A, S, D, Arriba, Abajo, Izquierda, Derecha,
         Shift, E, Espacio, Enter, Escape, Tab, I, Uno, Dos,
         F2, F3, F4, F5, F6, F7, F8, F9, F11, F12,
-        R, F, AvPag, RePag // mirar arriba / abajo con teclado
+        R, F, AvPag, RePag, // mirar arriba / abajo con teclado (R es recargar)
+        Tres, Cuatro, M, Q
     }
 
     public static class Entrada
@@ -52,6 +53,10 @@ namespace Eternauta.Beta
                 case Tecla.I: return new[] { Key.I };
                 case Tecla.Uno: return new[] { Key.Digit1, Key.Numpad1 };
                 case Tecla.Dos: return new[] { Key.Digit2, Key.Numpad2 };
+                case Tecla.Tres: return new[] { Key.Digit3, Key.Numpad3 };
+                case Tecla.Cuatro: return new[] { Key.Digit4, Key.Numpad4 };
+                case Tecla.M: return new[] { Key.M };
+                case Tecla.Q: return new[] { Key.Q };
                 case Tecla.F2: return new[] { Key.F2 };
                 case Tecla.F3: return new[] { Key.F3 };
                 case Tecla.F4: return new[] { Key.F4 };
@@ -100,6 +105,27 @@ namespace Eternauta.Beta
             return m == null ? 0f : m.delta.ReadValue().y;
         }
 
+        public static bool ClicPulsado()
+        {
+            var m = Mouse.current;
+            return m != null && m.leftButton.wasPressedThisFrame;
+        }
+
+        public static bool ClicMantenido()
+        {
+            var m = Mouse.current;
+            return m != null && m.leftButton.isPressed;
+        }
+
+        // Rueda del mouse: +1 / -1 por cuadro, 0 si no se movió.
+        public static int Rueda()
+        {
+            var m = Mouse.current;
+            if (m == null) return 0;
+            float y = m.scroll.ReadValue().y;
+            return y > 0.1f ? 1 : (y < -0.1f ? -1 : 0);
+        }
+
         public static bool MouseMovido()
         {
             var m = Mouse.current;
@@ -140,6 +166,10 @@ namespace Eternauta.Beta
                 case Tecla.I: return new[] { KeyCode.I };
                 case Tecla.Uno: return new[] { KeyCode.Alpha1, KeyCode.Keypad1 };
                 case Tecla.Dos: return new[] { KeyCode.Alpha2, KeyCode.Keypad2 };
+                case Tecla.Tres: return new[] { KeyCode.Alpha3, KeyCode.Keypad3 };
+                case Tecla.Cuatro: return new[] { KeyCode.Alpha4, KeyCode.Keypad4 };
+                case Tecla.M: return new[] { KeyCode.M };
+                case Tecla.Q: return new[] { KeyCode.Q };
                 case Tecla.F2: return new[] { KeyCode.F2 };
                 case Tecla.F3: return new[] { KeyCode.F3 };
                 case Tecla.F4: return new[] { KeyCode.F4 };
@@ -178,6 +208,15 @@ namespace Eternauta.Beta
         public static float MouseY()
         {
             return Input.GetAxisRaw("Mouse Y") * 10f;
+        }
+
+        public static bool ClicPulsado() { return Input.GetMouseButtonDown(0); }
+        public static bool ClicMantenido() { return Input.GetMouseButton(0); }
+
+        public static int Rueda()
+        {
+            float y = Input.mouseScrollDelta.y;
+            return y > 0.1f ? 1 : (y < -0.1f ? -1 : 0);
         }
 
         public static bool MouseMovido()

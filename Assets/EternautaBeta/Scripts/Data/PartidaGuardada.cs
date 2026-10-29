@@ -10,7 +10,7 @@ namespace Eternauta.Beta
     [Serializable]
     public class PartidaGuardada
     {
-        public int version = 1;
+        public int version = 2;
 
         // JUGADOR
         public int id_jugador = 1;
@@ -37,6 +37,17 @@ namespace Eternauta.Beta
         // Estado del mundo necesario para retomar la partida
         public List<int> entidades_retiradas = new List<int>();
         public List<string> puertas_abiertas = new List<string>();
+
+        // Versión 2 (muestra anual): mapa, armas, contenedores y bichos
+        public int mapa_id = 1;
+        public int semilla;
+        public int cargador;
+        public int[] hotbar = new int[4];
+        public int hotbar_sel;
+        public List<int> contenedores_abiertos = new List<int>();
+        public List<int> bichos_muertos = new List<int>();
+        public List<string> mapa_descubierto = new List<string>();
+        public bool pistola_encontrada;
     }
 
     [Serializable]
@@ -85,7 +96,7 @@ namespace Eternauta.Beta
             try
             {
                 var p = JsonUtility.FromJson<PartidaGuardada>(File.ReadAllText(Ruta));
-                return (p != null && p.version >= 1) ? p : null;
+                return (p != null && p.version >= 2) ? p : null;
             }
             catch (Exception e)
             {

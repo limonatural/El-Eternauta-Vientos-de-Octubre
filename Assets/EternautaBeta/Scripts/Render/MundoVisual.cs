@@ -19,6 +19,14 @@ namespace Eternauta.Beta
         public bool mostrarVistaPrevia;
         public float campoVisual = 58f;            // vertical, en grados
 
+        // Objeto en la mano (hotbar) y animaciones que dispara el juego
+        public string manoSprite;                  // modelo del objeto equipado (null = linterna)
+        public TipoArma manoTipo;
+        public float animGolpe = -1f;              // 0..1 mientras dura el golpe o el disparo (-1 = quieto)
+        public float animRecarga = -1f;            // 0..1 mientras se recarga
+        public float fogonazoT;                    // segundos que queda el fogonazo
+        public bool ocultarMuroNorte;              // cinemática del puente
+
         public RenderTexture Imagen { get; private set; }
         public RenderTexture ImagenVistaPrevia { get; private set; }
         public int Alto { get; private set; }
@@ -41,6 +49,7 @@ namespace Eternauta.Beta
             public Transform cuerpo;
             public Renderer[] renderers;
             public readonly Dictionary<string, Transform> partes = new Dictionary<string, Transform>();
+            public readonly Dictionary<string, Vector3> pivotes = new Dictionary<string, Vector3>();
             public Color luz;
             public bool interior;
         }
@@ -48,6 +57,24 @@ namespace Eternauta.Beta
 
         class PuertaVisual { public PuertaInfo info; public Transform hoja; public Renderer render; public float angulo; }
         readonly List<PuertaVisual> puertas = new List<PuertaVisual>();
+
+        class BichoVisual
+        {
+            public Bicho b;
+            public GameObject go;
+            public Transform cuerpo, patasA, patasB, antenas;
+            public Renderer[] renderers;
+        }
+        readonly List<BichoVisual> bichos = new List<BichoVisual>();
+        Transform bichosRaiz;
+        readonly List<GameObject> muroNorte = new List<GameObject>();
+
+        // Mano con el objeto equipado
+        Transform brazoRaiz, objetoMano;
+        GameObject brazoSin, brazoCon, fogonazo;
+        readonly Dictionary<string, GameObject> objetosMano = new Dictionary<string, GameObject>();
+        string objetoActual;
+        Entidad resaltadaAntes;
 
         readonly List<Transform> bengalas = new List<Transform>(), fogonazos = new List<Transform>();
         GameObject manoSin, manoCon;
@@ -98,12 +125,20 @@ namespace Eternauta.Beta
             // Escenario estático
             var escenario = new GameObject("Escenario").transform;
             escenario.SetParent(raiz.transform, false);
-            foreach (var kv in generador.mallas) CrearObjeto(kv.Key, kv.Value, Material(kv.Key), escenario);
+            foreach (var kv in generador.mallas)
+            {
+                if (kv.Value.v.Count == 0) continue;
+                var go = CrearObjeto(kv.Key, kv.Value, Material(GeneradorNivel.ClaveBase(kv.Key)), escenario);
+                if (kv.Key.EndsWith(GeneradorNivel.ClaveMuroNorte)) muroNorte.Add(go);
+            }
 
             // Obelisco (material propio: su niebla cambia en el final)
             matObelisco = new Material(matModelos) { name = "Obelisco" };
-            var ob = CrearObjeto("Obelisco", generador.obelisco, matObelisco, raiz.transform);
-            ob.transform.localPosition = GeneradorNivel.PosObelisco;
+            if (generador.hayObelisco)
+            {
+                var ob = CrearObjeto("Obelisco", generador.obelisco, matObelisco, raiz.transform);
+                ob.transform.localPosition = generador.posObelisco;
+            }
 
             // Cielo
             matCielo = new Material(Material("cielo")) { name = "Cielo" };
@@ -117,6 +152,9 @@ namespace Eternauta.Beta
 
             CrearEntidades();
             CrearPuertas();
+            bichosRaiz = new GameObject("Bichos").transform;
+            bichosRaiz.SetParent(raiz.transform, false);
+            CrearBichos();
 
             // Cámara del mundo (dibuja en una imagen chica que después se agranda)
             var goCam = new GameObject("Camara3D");
@@ -141,6 +179,26 @@ namespace Eternauta.Beta
             manoSin = CrearObjeto("ManoSinTraje", Modelos.Mano(false), matModelos, mano);
             manoCon = CrearObjeto("ManoConTraje", Modelos.Mano(true), matModelos, mano);
             manoCon.SetActive(false);
+
+            // Brazo que sostiene el objeto equipado (arma, comida, mapa...)
+            brazoRaiz = new GameObject("BrazoObjeto").transform;
+            brazoRaiz.SetParent(camara.transform, false);
+            brazoSin = CrearObjeto("BrazoSinTraje", Modelos.Brazo(false), matModelos, brazoRaiz);
+            brazoCon = CrearObjeto("BrazoConTraje", Modelos.Brazo(true), matModelos, brazoRaiz);
+            brazoCon.SetActive(false);
+            objetoMano = new GameObject("Objeto").transform;
+            objetoMano.SetParent(brazoRaiz, false);
+            objetoMano.localPosition = new Vector3(0f, 0.01f, 0.04f);
+            var fo = Modelos.Nueva();
+            fo.brillo = 1f;
+            fo.Caja(new Vector3(0, 0, 0.02f), new Vector3(0.05f, 0.05f, 0.05f), new Color32(255, 236, 160, 255));
+            fo.Caja(new Vector3(0, 0, 0.05f), new Vector3(0.025f, 0.025f, 0.06f), new Color32(255, 255, 230, 255));
+            fo.Caja(new Vector3(0, 0, 0.03f), new Vector3(0.1f, 0.012f, 0.012f), new Color32(255, 200, 80, 255));
+            fo.Caja(new Vector3(0, 0, 0.03f), new Vector3(0.012f, 0.1f, 0.012f), new Color32(255, 200, 80, 255));
+            fogonazo = CrearObjeto("Fogonazo", fo, matObelisco, objetoMano);
+            fogonazo.transform.localPosition = new Vector3(0f, 0.07f, 0.23f);
+            fogonazo.SetActive(false);
+            brazoRaiz.gameObject.SetActive(false);
 
             CrearNieve();
             CrearVistaPrevia();
@@ -216,6 +274,7 @@ namespace Eternauta.Beta
             padre.SetParent(raiz.transform, false);
             foreach (var e in mundo.entidades)
             {
+                if (generador.horneadas.Contains(e.def.id)) continue;
                 var ev = new EntidadVisual { e = e };
                 ev.go = new GameObject(e.def.sprite + "_" + e.def.id);
                 ev.go.transform.SetParent(padre, false);
@@ -230,6 +289,7 @@ namespace Eternauta.Beta
                     var t = CrearObjeto(p.nombre, p.malla, matModelos, ev.cuerpo).transform;
                     t.localPosition = p.pivote;
                     ev.partes[p.nombre] = t;
+                    ev.pivotes[p.nombre] = p.pivote;
                 }
                 if (e.def.tipo == TipoEntidad.Recurso)
                 {
@@ -242,7 +302,44 @@ namespace Eternauta.Beta
                 ev.interior = mundo.Interior(e.x, e.y);
                 ev.luz = generador.LuzEn(e.x, e.y, 0.45f);
                 ev.renderers = ev.go.GetComponentsInChildren<Renderer>();
+                Aplicar(ev.renderers, ev.luz, 0f, ev.interior ? 1f : 0f);
                 entidades.Add(ev);
+            }
+        }
+
+        void Aplicar(Renderer[] rs, Color luz, float resaltado, float interior)
+        {
+            bloque.Clear();
+            bloque.SetColor(IdColor, luz);
+            bloque.SetFloat(IdResaltado, resaltado);
+            bloque.SetFloat(IdInterior, interior);
+            foreach (var r in rs) r.SetPropertyBlock(bloque);
+        }
+
+        void CrearBichos()
+        {
+            foreach (var bv in bichos) if (bv.go != null) Object.Destroy(bv.go);
+            bichos.Clear();
+            foreach (var b in mundo.bichos)
+            {
+                var bv = new BichoVisual { b = b };
+                bv.go = new GameObject("Cascarudo_" + b.indice);
+                bv.go.transform.SetParent(bichosRaiz, false);
+                bv.cuerpo = new GameObject("Cuerpo").transform;
+                bv.cuerpo.SetParent(bv.go.transform, false);
+                var modelo = Modelos.Crear("cascarudo", 3);
+                CrearObjeto("Malla", modelo.malla, matModelos, bv.cuerpo);
+                foreach (var p in modelo.partes)
+                {
+                    var t = CrearObjeto(p.nombre, p.malla, matModelos, bv.cuerpo).transform;
+                    t.localPosition = p.pivote;
+                    if (p.nombre == "patasA") bv.patasA = t;
+                    else if (p.nombre == "patasB") bv.patasB = t;
+                    else if (p.nombre == "antenas") bv.antenas = t;
+                }
+                bv.go.transform.localScale = Vector3.one * 1.25f;
+                bv.renderers = bv.go.GetComponentsInChildren<Renderer>();
+                bichos.Add(bv);
             }
         }
 
@@ -383,11 +480,15 @@ namespace Eternauta.Beta
             camara.transform.localRotation = Quaternion.Euler(-inclinacion, yaw, 0f);
             cielo.localPosition = new Vector3(x, 0, -y);
 
-            // Mano
-            mano.gameObject.SetActive(mostrarManos);
+            // Mano: linterna, o el objeto equipado de la hotbar
+            bool conObjeto = mostrarManos && !string.IsNullOrEmpty(manoSprite);
+            mano.gameObject.SetActive(mostrarManos && !conObjeto);
             manoCon.SetActive(conTraje);
             manoSin.SetActive(!conTraje);
             mano.localPosition = new Vector3(0.11f + Mathf.Cos(faseBalanceo) * 0.006f * balanceo, -0.105f - Mathf.Abs(Mathf.Sin(faseBalanceo)) * 0.008f * balanceo, 0.17f);
+            brazoRaiz.gameObject.SetActive(conObjeto);
+            if (conObjeto) ActualizarObjetoMano(dt, balanceo, faseBalanceo);
+            muroNorteActivo(!ocultarMuroNorte);
 
             // Linterna más fuerte bajo techo
             bool adentro = mundo.Interior(x, y);
@@ -397,7 +498,7 @@ namespace Eternauta.Beta
             // Obelisco: más nítido en la secuencia final
             matObelisco.SetFloat("_NieblaMul", Mathf.Lerp(0.5f, 0.07f, Mathf.Clamp01((visibilidadObelisco - 0.3f) / 0.7f)));
 
-            // Objetos
+            // Objetos (solo los que se interactúan o se animan: la decoración quieta ya está pegada a la malla)
             foreach (var ev in entidades)
             {
                 bool activa = ev.e.activa;
@@ -428,13 +529,25 @@ namespace Eternauta.Beta
                     float actual = p.localEulerAngles.y;
                     p.localRotation = Quaternion.Euler(4f + Mathf.Sin(t * 0.9f) * 2f, Mathf.MoveTowardsAngle(actual, giro, dt * 120f), 0);
                 }
-                float res = ev.e == resaltada ? 0.3f + 0.2f * Mathf.Sin(t * 6f) : 0f;
-                bloque.Clear();
-                bloque.SetColor(IdColor, ev.luz);
-                bloque.SetFloat(IdResaltado, res);
-                bloque.SetFloat(IdInterior, ev.interior ? 1f : 0f);
-                foreach (var r in ev.renderers) r.SetPropertyBlock(bloque);
+                // contenedores: el cajón sale y la puerta de la heladera se abre
+                if (def.tipo == TipoEntidad.Cajon || def.tipo == TipoEntidad.Heladera)
+                {
+                    float objetivo = ev.e.abierto ? 1f : 0f;
+                    ev.e.abrirT = Mathf.MoveTowards(ev.e.abrirT, objetivo, dt * 4f);
+                    if (ev.partes.TryGetValue("cajon", out p)) p.localPosition = ev.pivotes["cajon"] + new Vector3(0, 0, -0.17f * ev.e.abrirT);
+                    if (ev.partes.TryGetValue("puerta", out p)) p.localRotation = Quaternion.Euler(0, 105f * ev.e.abrirT, 0);
+                }
+                // solo se vuelve a pintar lo que cambió de resaltado
+                bool resalta = ev.e == resaltada;
+                if (resalta)
+                    Aplicar(ev.renderers, ev.luz, 0.3f + 0.2f * Mathf.Sin(t * 6f), ev.interior ? 1f : 0f);
+                else if (ev.e == resaltadaAntes)
+                    Aplicar(ev.renderers, ev.luz, 0f, ev.interior ? 1f : 0f);
             }
+            resaltadaAntes = resaltada;
+
+            // Bichos
+            foreach (var bv in bichos) ActualizarBicho(bv, dt, t, x, y);
 
             // Puertas: giran hacia abierta o cerrada
             foreach (var pv in puertas)
@@ -488,7 +601,7 @@ namespace Eternauta.Beta
             mallaNieve.vertices = vertNieve;
         }
 
-        // Nueva partida: el mapa es el mismo, solo cambian los objetos y las puertas.
+        // Nueva partida en el mismo mapa: el escenario es el mismo, solo cambian los objetos, las puertas y los bichos.
         public void Vincular(Mundo m)
         {
             mundo = m;
@@ -502,6 +615,124 @@ namespace Eternauta.Beta
                 pv.angulo = m.Celda(pv.info.x, pv.info.y) == 'd' ? pv.info.anguloAbierta : pv.info.anguloCerrada;
                 pv.hoja.localRotation = Quaternion.Euler(0, pv.angulo, 0);
             }
+            resaltadaAntes = null;
+            CrearBichos();
+        }
+
+        // Los bichos de un mundo ya existente (por ejemplo, recién cargados de una partida guardada).
+        public void RecrearBichos() { CrearBichos(); }
+
+        bool muroVisible = true;
+        void muroNorteActivo(bool v)
+        {
+            if (v == muroVisible) return;
+            muroVisible = v;
+            foreach (var go in muroNorte) go.SetActive(v);
+        }
+
+        // Objeto de la hotbar en la mano: el arma tiene su pose, el resto se sostiene al frente.
+        void ActualizarObjetoMano(float dt, float balanceo, float fase)
+        {
+            if (objetoActual != manoSprite)
+            {
+                objetoActual = manoSprite;
+                foreach (var kv in objetosMano) kv.Value.SetActive(kv.Key == manoSprite);
+                if (!objetosMano.ContainsKey(manoSprite))
+                {
+                    var modelo = Modelos.Crear(manoSprite, 1);
+                    var b = modelo.malla;
+                    foreach (var p in modelo.partes) { b.Push(); b.Mover(p.pivote); b.Unir(p.malla); b.Pop(); }
+                    var go = CrearObjeto("En_mano_" + manoSprite, b, matModelos, objetoMano);
+                    if (manoTipo == TipoArma.Ninguna)
+                    {
+                        // comida, medicinas, mapa: más grandes y de frente
+                        go.transform.localScale = Vector3.one * 1.4f;
+                        go.transform.localPosition = new Vector3(0f, 0.0f, 0.03f);
+                        go.transform.localRotation = Quaternion.Euler(-35f, 0f, 0f);
+                    }
+                    else if (manoSprite == "palo") { go.transform.localScale = Vector3.one * 0.55f; go.transform.localPosition = new Vector3(0, 0.0f, -0.02f); go.transform.localRotation = Quaternion.Euler(-30f, 0f, 0f); }
+                    else if (manoSprite == "bate") { go.transform.localScale = Vector3.one * 0.5f; go.transform.localPosition = new Vector3(0, 0.0f, -0.02f); go.transform.localRotation = Quaternion.Euler(-35f, 0f, 0f); }
+                    else go.transform.localRotation = Quaternion.Euler(-8f, 0f, 0f);
+                    objetosMano[manoSprite] = go;
+                }
+                objetosMano[manoSprite].SetActive(true);
+            }
+            brazoCon.SetActive(conTraje);
+            brazoSin.SetActive(!conTraje);
+
+            // posición base con balanceo al caminar
+            Vector3 pos = new Vector3(0.12f + Mathf.Cos(fase) * 0.006f * balanceo, -0.115f - Mathf.Abs(Mathf.Sin(fase)) * 0.008f * balanceo, 0.2f);
+            Quaternion rot = Quaternion.Euler(-3f, -4f, 0f);
+            if (animGolpe >= 0f)
+            {
+                float k = Mathf.Sin(animGolpe * Mathf.PI);
+                if (manoTipo == TipoArma.Pistola)
+                {
+                    // retroceso: sube y vuelve
+                    pos += new Vector3(0f, 0.012f * k, -0.05f * k);
+                    rot = Quaternion.Euler(-3f - 12f * k, -4f, 0f);
+                }
+                else
+                {
+                    // golpe: barrido de derecha a izquierda
+                    pos += new Vector3(-0.2f * Mathf.Sin(animGolpe * Mathf.PI * 0.5f) + 0.06f, 0.03f * k, 0.1f * k);
+                    rot = Quaternion.Euler(-3f - 55f * k, -4f + 38f * k, 0f);
+                }
+            }
+            if (animRecarga >= 0f)
+            {
+                float k = Mathf.Sin(animRecarga * Mathf.PI);
+                pos += new Vector3(-0.04f * k, -0.1f * k, -0.03f * k);
+                rot = Quaternion.Euler(30f * k, -4f, -25f * k);
+            }
+            brazoRaiz.localPosition = pos;
+            brazoRaiz.localRotation = rot;
+            if (fogonazoT > 0f)
+            {
+                fogonazo.SetActive(true);
+                fogonazo.transform.localScale = Vector3.one * (0.8f + 0.5f * Mathf.PerlinNoise(Time.time * 40f, 1f));
+                fogonazoT -= dt;
+            }
+            else fogonazo.SetActive(false);
+        }
+
+        void ActualizarBicho(BichoVisual bv, float dt, float t, float px, float py)
+        {
+            var b = bv.b;
+            float dx = b.x - px, dy = b.y - py;
+            bool lejos = dx * dx + dy * dy > 38f * 38f;
+            bool oculto = lejos || (!b.vivo && b.tMuerte > Bicho.TiempoCadaver);
+            if (bv.go.activeSelf == oculto) bv.go.SetActive(!oculto);
+            if (oculto) return;
+
+            bv.go.transform.localPosition = new Vector3(b.x, 0f, -b.y);
+            bv.go.transform.localRotation = Quaternion.Euler(0f, Mathf.Atan2(Mathf.Cos(b.angulo), -Mathf.Sin(b.angulo)) * Mathf.Rad2Deg + 180f, 0f);
+            float escala = 1.25f;
+            if (b.vivo)
+            {
+                float bob = b.camina ? Mathf.Abs(Mathf.Sin(b.fase)) * 0.03f : Mathf.Sin(t * 2f + b.indice) * 0.006f;
+                float lunge = Mathf.Sin(b.tMordida * Mathf.PI) * 0.22f;
+                bv.cuerpo.localPosition = new Vector3(0f, bob, -lunge);
+                bv.cuerpo.localRotation = Quaternion.Euler(-lunge * 40f, 0f, 0f);
+                float sw = b.camina ? Mathf.Sin(b.fase * 1.4f) * 22f : Mathf.Sin(t * 3f + b.indice) * 3f;
+                if (bv.patasA != null) bv.patasA.localRotation = Quaternion.Euler(0f, sw, 0f);
+                if (bv.patasB != null) bv.patasB.localRotation = Quaternion.Euler(0f, -sw, 0f);
+                if (bv.antenas != null) bv.antenas.localRotation = Quaternion.Euler(Mathf.Sin(t * 5f + b.indice) * 8f, Mathf.Sin(t * 3.1f + b.indice) * 12f, 0f);
+            }
+            else
+            {
+                // patas para arriba
+                float caer = Mathf.Clamp01(b.tMuerte * 4f);
+                bv.cuerpo.localPosition = new Vector3(0f, 0.28f * caer, 0f);
+                bv.cuerpo.localRotation = Quaternion.Euler(0f, 0f, 180f * caer);
+                if (bv.patasA != null) bv.patasA.localRotation = Quaternion.Euler(0f, Mathf.Sin(b.tMuerte * 14f) * 10f * (1f - caer), 0f);
+                if (bv.patasB != null) bv.patasB.localRotation = Quaternion.identity;
+                float resto = Bicho.TiempoCadaver - b.tMuerte;
+                if (resto < 1.5f) escala *= Mathf.Max(0.05f, resto / 1.5f);   // se hunde en la nieve antes de desaparecer
+            }
+            bv.go.transform.localScale = Vector3.one * escala;
+            Aplicar(bv.renderers, mundo.Interior(b.x, b.y) ? generador.LuzEn(b.x, b.y, 0.3f) : new Color(1.02f, 1.02f, 1.05f, 1f),
+                b.tGolpe * 2.5f, mundo.Interior(b.x, b.y) ? 1f : 0f);
         }
 
         public void Destruir()

@@ -8,7 +8,8 @@ namespace Eternauta.Beta
     {
         const int Frec = 22050;
         readonly AudioSource viento, drone, radio, efectos;
-        readonly AudioClip clipPasoNieve, clipPasoMadera, clipRecoger, clipPuerta, clipMenu, clipLatido, clipError, clipTraje;
+        readonly AudioClip clipPasoNieve, clipPasoMadera, clipRecoger, clipPuerta, clipMenu, clipLatido, clipError, clipTraje,
+            clipDisparo, clipRecarga, clipVacio, clipAire, clipImpacto, clipBichoMuere, clipHerido, clipGrito, clipMuerte, clipCajon, clipDing;
         float proximoPaso, proximoLatido;
 
         public AudioProcedural(GameObject host)
@@ -28,6 +29,17 @@ namespace Eternauta.Beta
             clipError = Tonos("error", new[] { 180f, 150f }, 0.09f, 0.25f);
             clipLatido = Golpe("latido", 0.18f, 48f, 0.7f);
             clipTraje = Tonos("traje", new[] { 330f, 440f, 554f, 660f }, 0.1f, 0.25f);
+            clipDisparo = Disparo(rnd);
+            clipRecarga = Recarga(rnd);
+            clipVacio = Golpe("vacio", 0.05f, 900f, 0.25f);
+            clipAire = Ruido("golpe_aire", 0.18f, 0.25f, 0.8f, rnd);
+            clipImpacto = Golpe("impacto", 0.14f, 120f, 0.8f);
+            clipBichoMuere = Chirrido("bicho_muere", 0.55f, 520f, 140f, 0.45f);
+            clipGrito = Chirrido("bicho_grita", 0.3f, 380f, 640f, 0.35f);
+            clipHerido = Golpe("herido", 0.3f, 70f, 0.9f);
+            clipMuerte = Chirrido("muerte", 1.4f, 220f, 40f, 0.5f);
+            clipCajon = Ruido("cajon", 0.22f, 0.3f, 0.7f, rnd);
+            clipDing = Tonos("ding", new[] { 880f, 660f }, 0.22f, 0.25f);
         }
 
         static AudioSource Fuente(GameObject host, AudioClip clip, bool loop, float vol)
@@ -135,6 +147,60 @@ namespace Eternauta.Beta
             return Crear(nombre, d);
         }
 
+        // Disparo: estallido de ruido con un golpe grave.
+        static AudioClip Disparo(System.Random rnd)
+        {
+            int n = (int)(Frec * 0.28f);
+            var d = new float[n];
+            float f = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Frec;
+                float env = Mathf.Exp(-t * 22f);
+                f = f * 0.55f + (float)(rnd.NextDouble() * 2 - 1) * 0.45f;
+                float golpe = Mathf.Sin(2f * Mathf.PI * (140f - 90f * t) * t) * Mathf.Exp(-t * 30f);
+                d[i] = Mathf.Clamp((f * 0.9f + golpe) * env * 1.4f, -1f, 1f);
+            }
+            return Crear("disparo", d);
+        }
+
+        // Recarga: dos clics metálicos separados.
+        static AudioClip Recarga(System.Random rnd)
+        {
+            int n = (int)(Frec * 0.9f);
+            var d = new float[n];
+            float[] inicios = { 0.05f, 0.5f };
+            foreach (float ini in inicios)
+            {
+                int i0 = (int)(ini * Frec);
+                for (int i = 0; i < Frec * 0.08f && i0 + i < n; i++)
+                {
+                    float t = i / (float)Frec;
+                    d[i0 + i] += ((float)(rnd.NextDouble() * 2 - 1) * 0.5f + Mathf.Sin(2f * Mathf.PI * 1800f * t) * 0.5f) * Mathf.Exp(-t * 60f) * 0.5f;
+                }
+            }
+            return Crear("recarga", d);
+        }
+
+        // Chirrido de bicho: tono que sube o baja con ruido.
+        static AudioClip Chirrido(string nombre, float dur, float hzIni, float hzFin, float vol)
+        {
+            int n = (int)(Frec * dur);
+            var d = new float[n];
+            float fase = 0f;
+            var rnd = new System.Random(nombre.Length);
+            for (int i = 0; i < n; i++)
+            {
+                float k = i / (float)n;
+                float hz = Mathf.Lerp(hzIni, hzFin, k);
+                fase += 2f * Mathf.PI * hz / Frec;
+                float env = Mathf.Sin(Mathf.PI * k) * (1f - k * 0.3f);
+                float onda = Mathf.Sign(Mathf.Sin(fase)) * 0.4f + Mathf.Sin(fase * 1.5f) * 0.3f + (float)(rnd.NextDouble() * 2 - 1) * 0.3f;
+                d[i] = onda * env * vol;
+            }
+            return Crear(nombre, d);
+        }
+
         // Llamar cada frame.
         public void Actualizar(bool enMenu, bool jugando, bool bajoTecho, bool caminando, bool corriendo, bool radioSonando, bool saludBaja, float dt)
         {
@@ -170,5 +236,16 @@ namespace Eternauta.Beta
         public void Menu() { efectos.PlayOneShot(clipMenu, 0.6f); }
         public void Error() { efectos.PlayOneShot(clipError, 0.7f); }
         public void Traje() { efectos.PlayOneShot(clipTraje, 0.8f); }
+        public void Disparo() { efectos.PlayOneShot(clipDisparo, 1f); }
+        public void Recarga() { efectos.PlayOneShot(clipRecarga, 0.8f); }
+        public void ClickVacio() { efectos.PlayOneShot(clipVacio, 0.8f); }
+        public void GolpeAire() { efectos.PlayOneShot(clipAire, 0.7f); }
+        public void GolpeBicho() { efectos.PlayOneShot(clipImpacto, 0.9f); }
+        public void BichoMuere() { efectos.PlayOneShot(clipBichoMuere, 0.8f); }
+        public void BichoGrita() { efectos.PlayOneShot(clipGrito, 0.7f); }
+        public void Herido() { efectos.PlayOneShot(clipHerido, 1f); }
+        public void Muerte() { efectos.PlayOneShot(clipMuerte, 0.9f); }
+        public void Cajon() { efectos.PlayOneShot(clipCajon, 0.8f); }
+        public void Ding() { efectos.PlayOneShot(clipDing, 0.8f); }
     }
 }

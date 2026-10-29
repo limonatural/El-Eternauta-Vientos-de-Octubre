@@ -15,23 +15,25 @@ namespace Eternauta.Beta
         public bool invulnerable;     // herramienta de desarrollo
         public bool caminando;
         public bool bajoTecho;
-        public bool bloqueadoNorte;  // intentó cruzar el puente antes de tiempo
+        public int cargador;          // balas en la Glock
+        public string causaMuerte = "";
+        public float tIntentaNieve;   // segundos empujando contra el muro de nieve
+        public float factorNieve = 1f; // 0.5 en el tramo de Capital (fogatas de los soldados)
 
         public const float Radio = 0.22f;
         public const float VelCaminar = 2.4f, VelCorrer = 3.8f, VelGiro = 2.4f;
 
         // Pérdida de salud por segundo a la intemperie (con traje) según la exposición.
-        public const float DanioNieve = 0.55f;
-        public const float RecuperacionTecho = 1.5f; // bajo techo se recupera hasta 30
-        public const float VidaRecuperable = 30f;
+        public const float DanioNieve = 0.38f;
+        public const float RecuperacionTecho = 2.0f; // bajo techo se recupera hasta 60
+        public const float VidaRecuperable = 60f;
 
-        public void Actualizar(Mundo m, float avance, float lateral, float giro, float mirar, bool correr, float dt, float limiteNorte)
+        public void Actualizar(Mundo m, float avance, float lateral, float giro, float mirar, bool correr, float dt)
         {
             angulo += giro;
             inclinacion = Mathf.Clamp(inclinacion + mirar, -InclinacionMax, InclinacionMax);
             float dirX = Mathf.Cos(angulo), dirY = Mathf.Sin(angulo);
             float vel = correr ? VelCorrer : VelCaminar;
-            if (vida <= 0f) vel *= 0.5f;
             float mx = (dirX * avance - dirY * lateral);
             float my = (dirY * avance + dirX * lateral);
             float len = Mathf.Sqrt(mx * mx + my * my);
@@ -42,8 +44,6 @@ namespace Eternauta.Beta
             float nx = x + mx;
             if (!Choca(m, nx, y)) x = nx;
             float ny = y + my;
-            if (y >= limiteNorte && ny < limiteNorte) { ny = limiteNorte; bloqueadoNorte = true; }
-            else bloqueadoNorte = false;
             if (!Choca(m, x, ny)) y = ny;
 
             // Empujar fuera de los objetos sólidos (autos, árboles, muebles)
@@ -72,8 +72,8 @@ namespace Eternauta.Beta
             else
             {
                 exposicion = Mathf.Min(1f, exposicion + dt * (traje ? 0.03f : 0.25f));
-                float danio = (traje ? DanioNieve : 8f) * (0.4f + exposicion);
-                if (!invulnerable) vida = Mathf.Max(0f, vida - danio * dt);
+                float danio = (traje ? DanioNieve : 8f) * (0.4f + exposicion) * factorNieve;
+                if (!invulnerable) { vida = Mathf.Max(0f, vida - danio * dt); if (vida <= 0f) causaMuerte = "Te congelaste: la nieve mata a quien la toca."; }
             }
         }
 
@@ -82,6 +82,15 @@ namespace Eternauta.Beta
             return m.SolidaPunto(px - Radio, py - Radio) || m.SolidaPunto(px + Radio, py - Radio) ||
                    m.SolidaPunto(px - Radio, py + Radio) || m.SolidaPunto(px + Radio, py + Radio) ||
                    m.SolidaPunto(px, py);
+        }
+
+        // Daño de un bicho. Devuelve true si murió.
+        public bool Herir(float cantidad, string causa)
+        {
+            if (invulnerable || vida <= 0f) return false;
+            vida = Mathf.Max(0f, vida - cantidad);
+            if (vida <= 0f) { causaMuerte = causa; return true; }
+            return false;
         }
 
         public void Curar(int cantidad) { vida = Mathf.Min(100f, vida + cantidad); }

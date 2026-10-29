@@ -19,7 +19,7 @@ namespace Eternauta.Beta
 
     // Modelos 3D low-poly de todos los objetos del juego, armados por código.
     // Escala: 1 unidad = 1 celda del mapa = 2 metros. El frente de cada modelo mira a -Z.
-    public static class Modelos
+    public static partial class Modelos
     {
         public static Atlas atlas;
         static Region ruido;
@@ -137,6 +137,7 @@ namespace Eternauta.Beta
             l.Texto("DIARIO", 1, 1, 1, C(30, 30, 30));
             for (int y = 8; y < 15; y += 2) l.Rect(1, y, 22, 1, C(120, 120, 120));
             atlas.Agregar("diario", l);
+            CalcomaniasExtra(rnd);
         }
 
         // ------------------------------------------------------------------
@@ -179,6 +180,7 @@ namespace Eternauta.Beta
                 case "semaforo": Semaforo(m); break;
                 case "mapa": Mapa(b); break;
                 default:
+                    if (CrearExtra(nombre, m, b, rnd)) break;
                     Debug.LogWarning("[Eternauta] Falta el modelo " + nombre);
                     b.Caja(new Vector3(0, 0.15f, 0), new Vector3(0.3f, 0.3f, 0.3f), C(200, 0, 200));
                     break;
