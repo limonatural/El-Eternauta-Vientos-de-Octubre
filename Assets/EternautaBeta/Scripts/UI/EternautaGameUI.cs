@@ -45,12 +45,13 @@ namespace Eternauta.Beta
         // ------------------------------------------------------------------
         // NAVEGACIÓN CON TECLADO
         // ------------------------------------------------------------------
-        string[] OpcionesMenu() { return new[] { "NUEVA PARTIDA", "CONTINUAR", "OPCIONES", "CRÉDITOS", "SALIR" }; }
+        string[] OpcionesMenu() { return new[] { "NUEVA PARTIDA", "CONTINUAR", cap2Desbloqueado ? "CAPÍTULO 2" : "CAPÍTULO 2  (BLOQUEADO)", "OPCIONES", "CRÉDITOS", "SALIR" }; }
         string[] OpcionesPausa() { return new[] { "CONTINUAR", "INVENTARIO", "OPCIONES", "VOLVER AL MENÚ" }; }
 
         bool Habilitada(Estado e, int i)
         {
             if (e == Estado.MenuPrincipal && i == 1) return hayPartidaGuardada;
+            if (e == Estado.MenuPrincipal && i == 2) return cap2Desbloqueado;
             return true;
         }
 
@@ -77,8 +78,8 @@ namespace Eternauta.Beta
             {
                 case Estado.MenuPrincipal:
                     if (!Habilitada(estado, selMenu)) selMenu = 0;
-                    if (arriba) Mover(ref selMenu, 5, -1, estado);
-                    if (abajo) Mover(ref selMenu, 5, 1, estado);
+                    if (arriba) Mover(ref selMenu, 6, -1, estado);
+                    if (abajo) Mover(ref selMenu, 6, 1, estado);
                     if (ok) Activar(selMenu);
                     break;
                 case Estado.ConfirmarNueva:
@@ -120,8 +121,9 @@ namespace Eternauta.Beta
                     if (!Habilitada(estado, i)) { audioJuego.Error(); return; }
                     if (i == 0) { if (hayPartidaGuardada) { estado = Estado.ConfirmarNueva; selConfirmar = 0; } else NuevaPartida(); }
                     else if (i == 1) Continuar();
-                    else if (i == 2) { origenOpciones = Estado.MenuPrincipal; estado = Estado.Opciones; selOpciones = 0; }
-                    else if (i == 3) { origenCreditos = Estado.MenuPrincipal; estado = Estado.Creditos; selCreditos = 0; }
+                    else if (i == 2) NuevoCapitulo2();
+                    else if (i == 3) { origenOpciones = Estado.MenuPrincipal; estado = Estado.Opciones; selOpciones = 0; }
+                    else if (i == 4) { origenCreditos = Estado.MenuPrincipal; estado = Estado.Creditos; selCreditos = 0; }
                     else Salir();
                     break;
                 case Estado.ConfirmarNueva:
@@ -160,7 +162,7 @@ namespace Eternauta.Beta
         void NuevaPartida()
         {
             SistemaGuardado.Borrar();
-            ReiniciarMundo();
+            ReiniciarMundo(1, NuevaSemilla());
             partidaEnCurso = true;
             estado = Estado.Intro;
             introIdx = 0;
@@ -183,6 +185,10 @@ namespace Eternauta.Beta
             estado = Estado.MenuPrincipal;
             selMenu = 0;
             mensajes.Clear();
+            corteT = -1f; fundido = 0f; flashDanio = 0f;
+            visual.ocultarMuroNorte = false;
+            visual.manoSprite = null;
+            if (mundo.datos.id != 1) ReiniciarMundo(1, semillaPartida);
             hayPartidaGuardada = SistemaGuardado.ExistePartida();
         }
 
@@ -557,7 +563,12 @@ namespace Eternauta.Beta
                 case Estado.ConfirmarSalir: fondo = true; DibujarPausa(); fondo = false; DibujarConfirmacion("¿ESTÁS SEGURO?", "El progreso no guardado podría perderse.", "SÍ", "NO", ref selSalir); break;
                 case Estado.Inventario: DibujarInventario(); break;
                 case Estado.Final: DibujarFinal(); break;
+                case Estado.Mapa: DibujarMapa(); break;
+                case Estado.Muerte: DibujarMuerte(); break;
+                case Estado.Capitulo2Aviso: DibujarAviso(); break;
+                case Estado.Continuara: DibujarContinuara(); break;
             }
+            DibujarCorte();
 
             if (!modoFoto)
             {
@@ -586,6 +597,13 @@ namespace Eternauta.Beta
             {
                 GUI.color = new Color(0.55f, 0.04f, 0.04f, Mathf.Clamp01(alertaRoja));
                 GUI.DrawTexture(pantalla, texVineta, ScaleMode.StretchToFill, true);
+            }
+            if (flashDanio > 0.01f)
+            {
+                GUI.color = new Color(0.7f, 0.02f, 0.02f, Mathf.Clamp01(flashDanio) * 0.55f);
+                GUI.DrawTexture(pantalla, texVineta, ScaleMode.StretchToFill, true);
+                GUI.color = new Color(0.6f, 0f, 0f, Mathf.Clamp01(flashDanio) * 0.18f);
+                GUI.DrawTexture(pantalla, Texture2D.whiteTexture);
             }
             if (destello > 0.01f)
             {
@@ -621,8 +639,23 @@ namespace Eternauta.Beta
             const float m = 48f, alto = 64f;
             float x = m, y = m;
 
-            // Mira: un punto chico en el centro para apuntar a puertas y objetos.
+            // Mira: un punto en el centro; al acertar un golpe se marca en rojo.
             Caja(new Rect(AW / 2 - 3, AH / 2 - 3, 6, 6), ConAlfa(Blanco, HayInteraccion ? 0.9f : 0.35f));
+            var rm = Equipado();
+            if (rm != null && rm.arma == TipoArma.Pistola)
+            {
+                var cm = ConAlfa(Blanco, 0.55f);
+                Caja(new Rect(AW / 2 - 22, AH / 2 - 1, 12, 2), cm); Caja(new Rect(AW / 2 + 10, AH / 2 - 1, 12, 2), cm);
+                Caja(new Rect(AW / 2 - 1, AH / 2 - 22, 2, 12), cm); Caja(new Rect(AW / 2 - 1, AH / 2 + 10, 2, 12), cm);
+            }
+            if (marcaImpacto > 0f)
+            {
+                var ci = ConAlfa(Hex(0xE04A3A), Mathf.Clamp01(marcaImpacto * 8f));
+                Caja(new Rect(AW / 2 - 14, AH / 2 - 14, 8, 3), ci); Caja(new Rect(AW / 2 + 6, AH / 2 - 14, 8, 3), ci);
+                Caja(new Rect(AW / 2 - 14, AH / 2 + 11, 8, 3), ci); Caja(new Rect(AW / 2 + 6, AH / 2 + 11, 8, 3), ci);
+            }
+            if (tRecarga >= 0f)
+                Texto(new Rect(AW / 2 - 200, AH / 2 + 50, 400, 40), "RECARGANDO...", Estilo(false, 28, true, ConAlfa(Blanco, 0.9f), TextAnchor.MiddleCenter));
 
             // Salud
             int seg = jugador.Segmentos();
@@ -664,7 +697,7 @@ namespace Eternauta.Beta
             var obj = progresion.Actual;
             if (obj != null)
             {
-                string t = obj.titulo.ToUpperInvariant();
+                string t = (obj.titulo + ProgresoObjetivo()).ToUpperInvariant();
                 var stObj = Estilo(false, 30, true, Blanco);
                 float libre = AW - m - x - 48 - 20;
                 float anchoObj = Mathf.Min(AnchoTexto(stObj, t), libre);
@@ -677,6 +710,20 @@ namespace Eternauta.Beta
                 }
             }
 
+            // Pedido opcional en segundo plano: la pistola reglamentaria
+            if (!pistolaEncontrada && mundo.datos.id == 1 && progresion.indiceObjetivo < 4 && x < AW - 400 && avisoObjetivo <= 0f)
+            {
+                var stOp = Estilo(false, 26, false, ConAlfa(Blanco, 0.85f));
+                string op = "OPCIONAL: recuperar tu pistola reglamentaria (¿en la mesa de luz?)";
+                float wop = Mathf.Min(1150f, AnchoTexto(stOp, op) + 56f);
+                var rop = new Rect(m, y + alto + 10, wop, 44);
+                Caja(rop, ConAlfa(Negro, 0.6f));
+                Caja(new Rect(rop.x + 16, rop.y + 14, 14, 14), Gris);
+                Texto(new Rect(rop.x + 42, rop.y, rop.width - 54, rop.height), op, stOp);
+            }
+
+            DibujarHotbar();
+
             // Panel "OBJETIVO ACTUAL" (Etapa 11, wireframe 04) cuando cambia el objetivo
             if (avisoObjetivo > 0f && obj != null)
             {
@@ -685,7 +732,7 @@ namespace Eternauta.Beta
                 Caja(r, ConAlfa(Panel, 0.92f * a));
                 Marco(r, ConAlfa(Azul, a), 2f);
                 Texto(new Rect(r.x + 32, r.y + 16, r.width - 64, 36), "OBJETIVO ACTUAL", Estilo(false, 28, true, ConAlfa(Gris, a)));
-                Texto(new Rect(r.x + 32, r.y + 58, r.width - 64, 104), obj.descripcion, Estilo(false, 32, false, ConAlfa(Blanco, a), TextAnchor.UpperLeft, true));
+                Texto(new Rect(r.x + 32, r.y + 58, r.width - 64, 104), obj.descripcion + ProgresoObjetivo(), Estilo(false, 32, false, ConAlfa(Blanco, a), TextAnchor.UpperLeft, true));
                 Texto(new Rect(r.x + 32, r.y + 176, 420, 40), "ZONA: " + obj.zona, Estilo(false, 28, false, ConAlfa(Gris, a)));
                 Texto(new Rect(r.x + 472, r.y + 176, r.width - 504, 40), "DESTINO: " + obj.destino, Estilo(false, 28, false, ConAlfa(Gris, a)));
             }
@@ -712,10 +759,19 @@ namespace Eternauta.Beta
                 }
                 else
                 {
-                    nombre = objetivoInteraccion.def.tipo == TipoEntidad.Recurso
-                        ? ContenidoJuego.Recurso(objetivoInteraccion.def.idRecurso).nombre
-                        : objetivoInteraccion.def.nombre;
-                    accion = objetivoInteraccion.def.tipo == TipoEntidad.Recurso ? "RECOGER" : "INTERACTUAR";
+                    var def = objetivoInteraccion.def;
+                    nombre = def.tipo == TipoEntidad.Recurso ? ContenidoJuego.Recurso(def.idRecurso).nombre : def.nombre;
+                    switch (def.tipo)
+                    {
+                        case TipoEntidad.Recurso: accion = "RECOGER"; break;
+                        case TipoEntidad.Cajon: case TipoEntidad.Heladera: accion = objetivoInteraccion.abierto ? "REVISADO" : "ABRIR"; break;
+                        case TipoEntidad.Ascensor: accion = "USAR EL ASCENSOR"; break;
+                        case TipoEntidad.Cuadro: accion = "MIRAR"; break;
+                        case TipoEntidad.Radio: accion = radioTiempo >= 0f ? "APAGAR" : "ESCUCHAR"; break;
+                        case TipoEntidad.Personaje: accion = "HABLAR"; break;
+                        case TipoEntidad.MesaTrabajo: accion = "TRABAJAR"; break;
+                        default: accion = "INTERACTUAR"; break;
+                    }
                 }
                 var st = Estilo(false, 32, true, Blanco, TextAnchor.MiddleCenter);
                 string t = "[E]  " + accion;
@@ -887,7 +943,7 @@ namespace Eternauta.Beta
                     ? "En el Editor la resolución se elige en la pestaña Game. En el juego compilado se aplica al instante."
                     : "Los cambios se aplican al instante.";
                 Texto(new Rect(AW / 2 - 800, 760, 1600, 44), nota, Estilo(false, 28, false, Gris, TextAnchor.MiddleCenter));
-                Texto(new Rect(AW / 2 - 800, 812, 1600, 44), "Mirar arriba y abajo: mouse, R / F o RePág / AvPág.", Estilo(false, 28, false, Gris, TextAnchor.MiddleCenter));
+                Texto(new Rect(AW / 2 - 800, 812, 1600, 44), "Mirar arriba y abajo: mouse o RePág / AvPág.   Disparar: clic izquierdo.   Recargar: R.   Mapa: M.   Hotbar: 1 a 4.", Estilo(false, 28, false, Gris, TextAnchor.MiddleCenter));
             }
         }
 
@@ -902,8 +958,10 @@ namespace Eternauta.Beta
                 Texto(new Rect(0, 320, AW, 50), "EQUIPO", Estilo(true, 36, true, Gris, TextAnchor.MiddleCenter));
                 for (int i = 0; i < ContenidoJuego.Creditos.Length; i++)
                     Texto(new Rect(0, 384 + i * 58, AW, 50), ContenidoJuego.Creditos[i], Estilo(false, 32, false, Blanco, TextAnchor.MiddleCenter));
+                Texto(new Rect(0, 384 + ContenidoJuego.Creditos.Length * 58 + 30, AW, 60), "FIN DE LA BETA", Estilo(true, 48, true, Azul, TextAnchor.MiddleCenter));
+                Texto(new Rect(0, 384 + ContenidoJuego.Creditos.Length * 58 + 90, AW, 44), "Gracias por jugar.", Estilo(false, 28, false, Gris, TextAnchor.MiddleCenter));
             }
-            var r = new Rect(AW / 2 - 200, 720, 400, 72);
+            var r = new Rect(AW / 2 - 200, 830, 400, 72);
             if (Boton(r, "VOLVER", true, true, 500)) Activar(0);
         }
 
@@ -927,8 +985,15 @@ namespace Eternauta.Beta
             {
                 Caja(r, ConAlfa(Panel, 0.94f));
                 Marco(r, Azul, 2f);
-                Texto(new Rect(r.x + 40, r.y + 18, r.width - 80, 50), ContenidoJuego.Informante.nombre.ToUpperInvariant(), Estilo(true, 36, true, Azul));
                 string linea = dialogoIdx < dialogo.Count ? dialogo[dialogoIdx] : "";
+                string hablante = dialogoSargento ? ContenidoJuego.Sargento.nombre : ContenidoJuego.Informante.nombre;
+                if (linea.StartsWith("@") && linea.IndexOf('|') > 0)
+                {
+                    int barra = linea.IndexOf('|');
+                    hablante = linea.Substring(1, barra - 1);
+                    linea = linea.Substring(barra + 1);
+                }
+                Texto(new Rect(r.x + 40, r.y + 18, r.width - 80, 50), hablante.ToUpperInvariant(), Estilo(true, 36, true, hablante == "PABLO" ? Hex(0xD9B26F) : Azul));
                 // Con la decisión en pantalla, la línea ocupa menos alto para dejar lugar a la pregunta y a los botones.
                 float altoLinea = decisionActiva ? 92f : 170f;
                 Texto(new Rect(r.x + 40, r.y + 74, r.width - 80, altoLinea), "“" + linea + "”", Estilo(false, 32, false, Blanco, TextAnchor.UpperLeft, true));
@@ -963,10 +1028,10 @@ namespace Eternauta.Beta
                 Texto(new Rect(izq.xMax - 170, izq.y + 16, 140, 52), inventario.Total().ToString("00"), Estilo(true, 36, true, Gris, TextAnchor.MiddleRight));
                 Texto(new Rect(der.x + 30, der.y + 16, der.width - 60, 52), "OBJETO SELECCIONADO", Estilo(true, 36, true, Gris));
             }
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < Inventario.Orden.Length; i++)
             {
                 var cat = Inventario.Orden[i];
-                var fila = new Rect(izq.x + 20, izq.y + 90 + i * 124, izq.width - 40, 100);
+                var fila = new Rect(izq.x + 20, izq.y + 86 + i * 106, izq.width - 40, 94);
                 bool sel = invCategoria == i;
                 var ev = Event.current;
                 if (ev.type == EventType.MouseDown && ev.button == 0 && fila.Contains(Raton())) { invCategoria = i; invObjeto = 0; audioJuego.Menu(); ev.Use(); }
@@ -1007,13 +1072,27 @@ namespace Eternauta.Beta
                     if (lista.Count > 1)
                         Texto(new Rect(der.xMax - 260, der.y + 456, 230, 50), (invObjeto + 1) + " / " + lista.Count, Estilo(false, 32, true, Azul, TextAnchor.MiddleRight));
                 }
-                if (Boton(new Rect(der.x + 30, der.yMax - 96, 320, 72), "UTILIZAR", r.curacion > 0, r.curacion > 0, 700)) UtilizarSeleccionado();
+                bool equip = Equipable(r);
+                if (Boton(new Rect(der.x + 30, der.yMax - 96, 250, 72), r.curacion > 0 ? "UTILIZAR" : (equip ? "EQUIPAR" : "—"), equip, equip, 700, 30)) UtilizarSeleccionado();
+                for (int k = 0; k < 4; k++)
+                    if (Boton(new Rect(der.x + 296 + k * 70, der.yMax - 96, 62, 72), (k + 1).ToString(), equip, inventario.hotbar[k] == r.id, 710 + k, 32)) AsignarRanuraSeleccionado(k);
                 if (lista.Count > 1 && Boton(new Rect(der.xMax - 230, der.yMax - 96, 90, 72), "<", true, false, 701)) invObjeto = (invObjeto + lista.Count - 1) % lista.Count;
                 if (lista.Count > 1 && Boton(new Rect(der.xMax - 120, der.yMax - 96, 90, 72), ">", true, false, 702)) invObjeto = (invObjeto + 1) % lista.Count;
             }
 
             if (Event.current.type == EventType.Repaint)
-                Texto(new Rect(AW / 2 - 800, 856, 1600, 44), "[W/S] categoría   ·   [A/D] objeto   ·   [E] utilizar   ·   [Esc] volver", Estilo(false, 28, false, Gris, TextAnchor.MiddleCenter));
+            {
+                var sbH = new System.Text.StringBuilder("HOTBAR:   ");
+                for (int k = 0; k < 4; k++)
+                {
+                    var rh = inventario.hotbar[k] != 0 ? ContenidoJuego.Recurso(inventario.hotbar[k]) : null;
+                    sbH.Append(k + 1).Append(" ").Append(rh != null ? rh.nombre : "—");
+                    if (k < 3) sbH.Append("    ·    ");
+                }
+                Texto(new Rect(AW / 2 - 800, 904, 1600, 44), sbH.ToString(), Estilo(false, 28, true, Blanco, TextAnchor.MiddleCenter));
+            }
+            if (Event.current.type == EventType.Repaint)
+                Texto(new Rect(AW / 2 - 800, 856, 1600, 44), "[W/S] categoría   ·   [A/D] objeto   ·   [E] utilizar / equipar   ·   [1-4] poner en la hotbar   ·   [Esc] volver", Estilo(false, 28, false, Gris, TextAnchor.MiddleCenter));
         }
 
         // ---------------- SECUENCIA FINAL (lámina 8E) ----------------
@@ -1065,7 +1144,7 @@ namespace Eternauta.Beta
                 "F2 invulnerable   F3 completar objetivo\n" +
                 "F4 ir a la siguiente postal\n" +
                 "F5 +1 de cada recurso   F6 cambiar salud\n" +
-                "F7 saltar al puente   F8 efecto VHS\n" +
+                "F7 ir al acceso del puente   F8 efecto VHS\n" +
                 "F11 modo foto   F12 captura";
             Texto(new Rect(r.x + 24, r.y + 18, r.width - 48, r.height - 36), info, st);
         }

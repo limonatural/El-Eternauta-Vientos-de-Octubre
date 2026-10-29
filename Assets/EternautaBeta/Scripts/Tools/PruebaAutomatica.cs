@@ -10,9 +10,9 @@ namespace Eternauta.Beta
     // Prueba automática de la beta 1.1 (testing de la versión entregada y verificación de ERR-01).
     //
     // Se ejecuta desde el menú de Unity "Eternauta > Ejecutar prueba automática" o, en el juego
-    // compilado, abriendo el .exe con el argumento -prueba. Recorre el prólogo completo usando
-    // las mismas funciones del juego (recoger, mesa de trabajo, puertas, radio, diálogo, inventario,
-    // pausa, guardado, CONTINUAR y final), saca una captura de cada pantalla y escribe un informe
+    // compilado, abriendo el .exe con el argumento -prueba. Recorre el prólogo y el capítulo 2 usando
+    // las mismas funciones del juego (cajones, mesa de trabajo, ascensor, combate, mapa, hotbar, radio,
+    // diálogos, inventario, pausa, muerte, guardado, CONTINUAR y final), saca una captura de cada pantalla y escribe un informe
     // en Capturas/Pruebas/<fecha>_<resolución>/INFORME_PRUEBAS.md.
     //
     // Para ERR-01 revisa, en cada cuadro dibujado durante la prueba, todos los textos de la interfaz:
@@ -246,13 +246,16 @@ namespace Eternauta.Beta
             {
                 new KeyValuePair<string, Func<IEnumerator>>("Apertura y menús", PasoApertura),
                 new KeyValuePair<string, Func<IEnumerator>>("Nueva partida", PasoNuevaPartida),
-                new KeyValuePair<string, Func<IEnumerator>>("Objetivo 1: traje y puertas", PasoTraje),
-                new KeyValuePair<string, Func<IEnumerator>>("Objetivo 2: comida y radio", PasoComidaYRadio),
-                new KeyValuePair<string, Func<IEnumerator>>("Objetivo 3: Informante", PasoInformante),
-                new KeyValuePair<string, Func<IEnumerator>>("Inventario", PasoInventario),
+                new KeyValuePair<string, Func<IEnumerator>>("Departamento: pistola, cajones y traje", PasoDepartamento),
+                new KeyValuePair<string, Func<IEnumerator>>("Ascensor y salida al exterior", PasoAscensor),
+                new KeyValuePair<string, Func<IEnumerator>>("Comida e informante", PasoComidaYInformante),
+                new KeyValuePair<string, Func<IEnumerator>>("Combate contra los bichos", PasoCombate),
+                new KeyValuePair<string, Func<IEnumerator>>("Mapa, hotbar e inventario", PasoMapaHotbarInventario),
                 new KeyValuePair<string, Func<IEnumerator>>("Pausa", PasoPausa),
+                new KeyValuePair<string, Func<IEnumerator>>("Muerte y despertar", PasoMuerte),
                 new KeyValuePair<string, Func<IEnumerator>>("Guardado y CONTINUAR", PasoGuardado),
-                new KeyValuePair<string, Func<IEnumerator>>("Final del prólogo", PasoFinal),
+                new KeyValuePair<string, Func<IEnumerator>>("Final del prólogo y capítulo 2 desbloqueado", PasoFinal),
+                new KeyValuePair<string, Func<IEnumerator>>("Capítulo 2: radio, puente y sargento", PasoCapitulo2),
             };
             foreach (var paso in pasos)
             {
@@ -348,91 +351,58 @@ namespace Eternauta.Beta
             jugador.invulnerable = true; // la prueba no mide el daño por frío
             yield return Esperar(1.2f);
             Comprobar("Primer objetivo: armar el traje", progresion.Actual != null && progresion.Actual.id == 1);
+            Comprobar("El juego empieza en el departamento", jugador.y >= mundo.datos.salidaBajaY, "y = " + jugador.y);
+            Comprobar("Hay entre 4 y 10 bichos en Avellaneda", bichosTotalesMapa >= 4 && bichosTotalesMapa <= 10, "Bichos: " + bichosTotalesMapa);
             yield return Captura("hud_objetivo_actual");
         }
 
-        IEnumerator PasoTraje()
+        IEnumerator PasoDepartamento()
         {
-            // Sin traje la puerta del refugio no se abre
-            jugador.x = 15.5f; jugador.y = 32.45f; jugador.angulo = -90f * Mathf.Deg2Rad; jugador.inclinacion = 0f;
-            yield return Esperar(0.5f);
-            Comprobar("Se detecta la puerta del refugio", puertaX == 15 && puertaY == 31, "Puerta detectada: " + puertaX + "," + puertaY);
-            puertaX = 15; puertaY = 31; objetivoInteraccion = null;
-            Interactuar();
-            Comprobar("Sin traje, la puerta del refugio no se abre", mundo.Celda(15, 31) == 'D');
-            yield return Captura("puerta_sin_traje");
+            yield return UsarEntidad(100, "Mirar el cuadro familiar", "cuadro_familiar");
+            Comprobar("El cuadro nombra a la familia", mensajes.Count > 0 && mensajes[mensajes.Count - 1].texto.Contains("Celeste"));
+            yield return UsarEntidad(111, "Abrir el cajón de la mesa de luz", "cajon_pistola");
+            Comprobar("La Glock 19 está en el cajón con 15 + 5 balas",
+                inventario.Cantidad(ContenidoJuego.IdPistola) == 1 && jugador.cargador == 15 && inventario.Cantidad(ContenidoJuego.IdMunicion) == 5,
+                "Cargador " + jugador.cargador + ", repuesto " + inventario.Cantidad(ContenidoJuego.IdMunicion));
+            Comprobar("La pistola queda en la hotbar", inventario.hotbar[0] == ContenidoJuego.IdPistola);
+            yield return Esperar(0.4f);
+            yield return Captura("hud_pistola");
+            yield return UsarEntidad(111, "Revisar el cajón otra vez");
+            Comprobar("Un cajón revisado no da nada más", inventario.Cantidad(ContenidoJuego.IdPistola) == 1);
 
-            yield return UsarEntidad(11, "Recoger lona", "recoger_objeto");
-            Comprobar("Recoger lona", !mundo.BuscarEntidad(11).activa);
-            yield return UsarEntidad(12, "Recoger alambre");
-            Comprobar("Recoger alambre", !mundo.BuscarEntidad(12).activa);
-            yield return UsarEntidad(13, "Recoger botiquín");
-            Comprobar("Recoger botiquín", !mundo.BuscarEntidad(13).activa);
-            yield return UsarEntidad(10, "Usar la mesa de trabajo");
+            yield return UsarEntidad(114, "Abrir el cajón del taller");
+            yield return UsarEntidad(115, "Abrir el cajón de herramientas");
+            Comprobar("Hay materiales para el traje", inventario.CantidadCategoria(Categoria.Materiales) >= 2);
+
+            yield return UsarEntidad(109, "Ascensor sin traje");
+            Comprobar("Sin traje el ascensor no sale al exterior", corteT < 0f);
+
+            yield return UsarEntidad(116, "Usar la mesa de trabajo");
             Comprobar("Objetivo 1 completado: traje armado", jugador.traje && progresion.Completado(1));
             yield return Captura("traje_armado");
-
-            // Puerta: abrir, cerrar y volver a abrir
-            jugador.x = 15.5f; jugador.y = 32.45f; jugador.angulo = -90f * Mathf.Deg2Rad; jugador.inclinacion = 0f;
-            yield return Esperar(0.4f);
-            puertaX = 15; puertaY = 31; objetivoInteraccion = null;
-            Interactuar();
-            Comprobar("Con traje, la puerta se abre", mundo.Celda(15, 31) == 'd');
-            yield return Esperar(0.8f);
-            yield return Captura("puerta_abierta");
-            puertaX = 15; puertaY = 31; objetivoInteraccion = null;
-            Interactuar();
-            Comprobar("La puerta abierta se puede cerrar (no desaparece)", mundo.Celda(15, 31) == 'D');
-            yield return Esperar(0.8f);
-            yield return Captura("puerta_cerrada");
-            puertaX = 15; puertaY = 31; objetivoInteraccion = null;
-            Interactuar();
-            Comprobar("La puerta se vuelve a abrir", mundo.Celda(15, 31) == 'd');
         }
 
-        IEnumerator PasoComidaYRadio()
+        IEnumerator PasoAscensor()
+        {
+            yield return UsarEntidad(109, "Usar el ascensor");
+            yield return Esperar(0.6f);
+            yield return Captura("corte_ascensor");
+            yield return Esperar(3.2f);
+            var d = mundo.datos;
+            Comprobar("El ascensor lleva al hall del edificio", corteT < 0f && Mathf.Abs(jugador.x - d.hallX) < 1f && Mathf.Abs(jugador.y - d.hallY) < 1f,
+                "Posición " + jugador.x.ToString("0.0") + ", " + jugador.y.ToString("0.0"));
+            yield return Captura("hall_edificio");
+        }
+
+        IEnumerator PasoComidaYInformante()
         {
             Comprobar("Segundo objetivo: buscar comida", progresion.EsActual(2));
-            yield return UsarEntidad(21, "Recoger galletitas");
-            yield return UsarEntidad(20, "Recoger lata de conserva", "casa_abandonada");
+            yield return UsarEntidad(230, "Abrir la heladera del kiosco");
             Comprobar("Objetivo 2 completado: comida", progresion.Completado(2));
+            yield return Captura("heladera_abierta");
 
-            yield return UsarEntidad(23, "Encender la radio");
-            Comprobar("La radio se enciende", radioTiempo >= 0f);
-            var lineas = new HashSet<string>();
-            bool capturada = false, corte = false;
-            float limite = Time.realtimeSinceStartup + 30f;
-            while (Time.realtimeSinceStartup < limite)
-            {
-                foreach (var m in mensajes)
-                    if (m.texto.StartsWith("RADIO: ")) lineas.Add(m.texto);
-                if (!capturada && radioTiempo > 2f * ContenidoJuego.RadioIntervalo + 0.8f)
-                {
-                    capturada = true;
-                    yield return Captura("radio_bichos");
-                    continue;
-                }
-                if (radioTiempo < 0f)
-                {
-                    corte = mensajes.Count > 0 && mensajes[0].texto == ContenidoJuego.RadioCorte;
-                    break;
-                }
-                yield return null;
-            }
-            Comprobar("La radio pasa todas sus líneas", lineas.Count == ContenidoJuego.Radio.Length,
-                lineas.Count + " de " + ContenidoJuego.Radio.Length);
-            bool mencion = false;
-            foreach (var l in lineas) if (l.Contains("Obelisco") && l.Contains("atacados")) mencion = true;
-            Comprobar("La radio avisa del ataque a los militares del Obelisco", mencion);
-            Comprobar("La señal se corta en medio del aviso", corte);
-            yield return Esperar(0.4f);
-            yield return Captura("radio_corte");
-        }
-
-        IEnumerator PasoInformante()
-        {
             Comprobar("Tercer objetivo: hablar con el sobreviviente", progresion.EsActual(3));
-            yield return UsarEntidad(30, "Hablar con el Informante");
+            yield return UsarEntidad(229, "Hablar con el Informante");
             Comprobar("Se abre el diálogo", estado == Estado.Dialogo, "Estado: " + estado);
             yield return Captura("dialogo");
             bool huboDecision = false;
@@ -448,43 +418,109 @@ namespace Eternauta.Beta
                 yield return Esperar(0.25f);
             }
             Comprobar("Aparece la decisión de darle un medicamento", huboDecision);
-            Comprobar("Objetivo 3 completado y se recibe el mapa", progresion.Completado(3) && inventario.Cantidad(9) > 0);
+            Comprobar("Objetivo 3 completado y se recibe el mapa", progresion.Completado(3) && inventario.Cantidad(ContenidoJuego.IdMapa) > 0);
             Comprobar("Cuarto objetivo: llegar al Puente Pueyrredón", progresion.EsActual(4));
         }
 
-        IEnumerator PasoInventario()
+        IEnumerator PasoCombate()
         {
-            jugador.vida = 40f;
+            jugador.x = 75.5f; jugador.y = 56f; jugador.angulo = Mathf.PI / 2f; jugador.inclinacion = 0f;
+            SeleccionarRanura(0);
+            tEnfriamiento = 0f;
+            yield return Esperar(0.3f);
+            var b = new Bicho(900, 75.5f, 60f, false, new System.Random(5));
+            mundo.bichos.Add(b);
+            visual.RecrearBichos();
+            yield return Esperar(0.3f);
+            yield return Captura("bicho_enfrente");
+            int antes = jugador.cargador;
+            for (int i = 0; i < 3; i++)
+            {
+                tEnfriamiento = 0f;
+                b.x = 75.5f; b.y = 59f;     // sigue de frente al caño
+                Atacar(ContenidoJuego.Arma(ContenidoJuego.IdPistola));
+                yield return Esperar(0.1f);
+            }
+            Comprobar("Tres disparos matan a un cascarudo", !b.vivo, "Vida restante " + Mathf.RoundToInt(b.vida));
+            Comprobar("Cada disparo gasta una bala", jugador.cargador == antes - 3, "Cargador " + jugador.cargador);
+            yield return Captura("bicho_muerto");
+
+            inventario.Agregar(ContenidoJuego.IdCuchillo, 1);
+            inventario.hotbar[1] = ContenidoJuego.IdCuchillo;
+            SeleccionarRanura(1);
+            var b2 = new Bicho(901, 75.5f, 57.2f, false, new System.Random(6));
+            mundo.bichos.Add(b2);
+            visual.RecrearBichos();
+            int golpes = 0;
+            while (b2.vivo && golpes < 10)
+            {
+                tEnfriamiento = 0f;
+                b2.x = 75.5f; b2.y = 57.2f;
+                Atacar(ContenidoJuego.Arma(ContenidoJuego.IdCuchillo));
+                golpes++;
+                yield return null;
+            }
+            Comprobar("El cuchillo necesita 4 golpes (no 3)", golpes == 4, "Golpes: " + golpes);
+
+            inventario.Agregar(ContenidoJuego.IdMunicion, 20);
+            SeleccionarRanura(0);
+            jugador.cargador = 3;
+            IntentarRecargar();
+            yield return Esperar(TiempoRecarga + 0.5f);
+            Comprobar("R recarga el cargador", jugador.cargador == ContenidoJuego.CargadorCapacidad, "Cargador " + jugador.cargador);
+
+            jugador.invulnerable = false;
+            float v = jugador.vida;
+            jugador.Herir(ContenidoJuego.DanioBicho, "prueba");
+            Comprobar("Una mordida quita el 20 % de la salud", Mathf.Abs((v - jugador.vida) - 20f) < 0.01f, "Salud " + Mathf.RoundToInt(v) + " → " + Mathf.RoundToInt(jugador.vida));
+            jugador.vida = 100f;
+            jugador.invulnerable = true;
+
+            float t0 = Time.realtimeSinceStartup;
+            yield return Esperar(0.2f);
+            // el cadáver se va solo a los 15 segundos
+            b.tMuerte = Bicho.TiempoCadaver + 1f;
+            yield return Esperar(0.3f);
+            Comprobar("El cadáver desaparece a los 15 segundos", b.tMuerte > Bicho.TiempoCadaver);
+        }
+
+        IEnumerator PasoMapaHotbarInventario()
+        {
+            AbrirMapa();
+            Comprobar("La tecla M abre el mapa", estado == Estado.Mapa);
+            yield return Esperar(0.4f);
+            yield return Captura("mapa");
+            estado = Estado.Jugando;
+            Comprobar("El mapa descubierto tiene zonas vistas", DescubiertoDe(1).v.Length > 0 && System.Array.IndexOf(DescubiertoDe(1).v, true) >= 0);
+
             AbrirInventario(Estado.Jugando);
             Comprobar("Se abre el inventario", estado == Estado.Inventario);
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < Inventario.Orden.Length; i++)
             {
                 invCategoria = i; invObjeto = 0;
                 yield return Esperar(0.6f);
                 yield return Captura("inventario_" + Inventario.NombreCategoria(Inventario.Orden[i]).ToLowerInvariant().Replace(' ', '_'));
             }
-            // Utilizar un recurso que cure
-            int cat = -1;
-            for (int i = 0; i < 4 && cat < 0; i++)
+            // asignar el mapa a la ranura 4
+            for (int i = 0; i < Inventario.Orden.Length; i++)
                 foreach (var r in inventario.ObjetosDe(Inventario.Orden[i]))
-                    if (r.curacion > 0) { cat = i; invObjeto = inventario.ObjetosDe(Inventario.Orden[i]).IndexOf(r); break; }
-            if (cat >= 0)
-            {
-                invCategoria = cat;
-                float antes = jugador.vida;
-                int total = inventario.Total();
-                UtilizarSeleccionado();
-                Comprobar("UTILIZAR cura y descuenta el recurso", jugador.vida > antes && inventario.Total() == total - 1,
-                    "Salud " + Mathf.RoundToInt(antes) + " → " + Mathf.RoundToInt(jugador.vida));
-                yield return Esperar(0.4f);
-                yield return Captura("inventario_utilizar");
-            }
-            else Comprobar("UTILIZAR cura y descuenta el recurso", false, "No había recursos curativos");
+                    if (r.id == ContenidoJuego.IdMapa) { invCategoria = i; invObjeto = inventario.ObjetosDe(Inventario.Orden[i]).IndexOf(r); }
+            AsignarRanuraSeleccionado(3);
+            Comprobar("El mapa se puede poner en la hotbar", inventario.hotbar[3] == ContenidoJuego.IdMapa);
             CerrarInventario();
-            Comprobar("Se cierra el inventario", estado == Estado.Jugando);
-            jugador.vida = 25f;
-            yield return Esperar(0.5f);
-            yield return Captura("hud_salud_baja");
+            SeleccionarRanura(3);
+            yield return Esperar(0.4f);
+            yield return Captura("hotbar_mapa_en_mano");
+            SeleccionarRanura(0);
+
+            jugador.vida = 40f;
+            inventario.Agregar(15, 1);
+            inventario.hotbar[2] = 15;
+            SeleccionarRanura(2);
+            tEnfriamiento = 0f;
+            UsarObjeto(ContenidoJuego.Recurso(15));
+            Comprobar("Comer el objeto equipado cura", jugador.vida > 40f, "Salud " + Mathf.RoundToInt(jugador.vida));
+            SeleccionarRanura(0);
             jugador.vida = 100f;
         }
 
@@ -497,15 +533,27 @@ namespace Eternauta.Beta
             yield return Esperar(0.3f);
             CerrarInventario();
             Comprobar("El inventario desde la pausa vuelve a la pausa", estado == Estado.Pausa);
-            origenOpciones = Estado.Pausa; estado = Estado.Opciones;
-            yield return Captura("pausa_opciones");
-            estado = Estado.Pausa;
-            estado = Estado.ConfirmarSalir; selSalir = 1;
-            yield return Captura("pausa_confirmar_salir");
-            estado = Estado.Pausa;
-            Activar(0); // CONTINUAR
-            Comprobar("CONTINUAR de la pausa vuelve al juego", estado == Estado.Jugando);
+            estado = Estado.Jugando;
             yield return null;
+        }
+
+        IEnumerator PasoMuerte()
+        {
+            jugador.invulnerable = false;
+            jugador.Herir(100f, "Un cascarudo gigante te mordió hasta matarte.");
+            yield return Esperar(0.3f);
+            Comprobar("Con la salud en 0 aparece la pantalla de muerte", estado == Estado.Muerte, "Estado: " + estado);
+            yield return Esperar(2f);
+            yield return Captura("pantalla_muerte");
+            ActivarMuerte(0);
+            yield return Esperar(0.8f);
+            yield return Captura("corte_mal_sueno");
+            yield return Esperar(3.2f);
+            var d = mundo.datos;
+            Comprobar("Despertar deja al protagonista en la cama con salud completa",
+                estado == Estado.Jugando && jugador.vida >= 99f && Mathf.Abs(jugador.x - d.camaX) < 0.5f && Mathf.Abs(jugador.y - d.camaY) < 0.5f,
+                "Estado " + estado + ", salud " + Mathf.RoundToInt(jugador.vida));
+            jugador.invulnerable = true;
         }
 
         IEnumerator PasoGuardado()
@@ -515,9 +563,9 @@ namespace Eternauta.Beta
             Comprobar("Se escribe el archivo de guardado (JSON)", File.Exists(SistemaGuardado.Ruta), SistemaGuardado.Ruta);
             var p = SistemaGuardado.Cargar();
             bool datos = p != null && p.traje_aislante && Mathf.Abs(p.pos_x - x) < 0.01f && Mathf.Abs(p.pos_y - y) < 0.01f &&
-                         p.inventario.Exists(i => i.id_recurso == 9) &&
+                         p.inventario.Exists(i => i.id_recurso == ContenidoJuego.IdMapa) && p.pistola_encontrada && p.contenedores_abiertos.Count > 0 &&
                          p.objetivos.Exists(o => o.id_objetivo == 3 && o.estado == "Completado");
-            Comprobar("El JSON guarda posición, traje, inventario y objetivos", datos);
+            Comprobar("El JSON guarda posición, traje, inventario, contenedores y objetivos", datos);
 
             AbrirPausa();
             estado = Estado.ConfirmarSalir;
@@ -528,42 +576,88 @@ namespace Eternauta.Beta
             yield return Captura("menu_continuar_habilitado");
 
             // Se pierde todo lo de la memoria y se carga desde el archivo
-            ReiniciarMundo();
+            ReiniciarMundo(1, NuevaSemilla());
             Activar(1); // CONTINUAR
             bool recuperada = estado == Estado.Jugando && jugador.traje && Mathf.Abs(jugador.x - x) < 0.01f &&
-                              Mathf.Abs(jugador.y - y) < 0.01f && inventario.Cantidad(9) > 0 && progresion.EsActual(4) &&
-                              mundo.Celda(15, 31) == 'd';
+                              Mathf.Abs(jugador.y - y) < 0.01f && inventario.Cantidad(ContenidoJuego.IdMapa) > 0 && progresion.EsActual(4) &&
+                              pistolaEncontrada && mundo.BuscarEntidad(111).abierto;
             Comprobar("CONTINUAR recupera la partida guardada", recuperada, "Estado: " + estado);
+            jugador.invulnerable = true;
             yield return Esperar(1f);
             yield return Captura("partida_continuada");
         }
 
         IEnumerator PasoFinal()
         {
-            jugador.x = 15.5f; jugador.y = 7.8f; jugador.angulo = -90f * Mathf.Deg2Rad; jugador.inclinacion = 0f;
+            var d = mundo.datos;
+            jugador.x = d.llegadaX; jugador.y = d.llegadaY + 3f; jugador.angulo = -90f * Mathf.Deg2Rad; jugador.inclinacion = 0f;
             estado = Estado.Jugando;
             yield return Esperar(0.5f);
-            yield return Captura("puente_pueyrredon");
-            float limite = Time.realtimeSinceStartup + 10f;
+            yield return Captura("acceso_puente");
+            float limite = Time.realtimeSinceStartup + 6f;
             while (estado == Estado.Jugando && Time.realtimeSinceStartup < limite)
             {
-                jugador.y -= 0.03f; // camina hacia el norte, por el puente
+                jugador.y -= 0.03f; // camina hacia el norte
                 yield return null;
             }
-            Comprobar("Al cruzar la línea del puente empieza el final", estado == Estado.Final, "Estado: " + estado);
+            Comprobar("Al llegar al acceso del puente empieza el final", estado == Estado.Final, "Estado: " + estado);
             yield return Esperar(5f);
             yield return Captura("final_obelisco");
-            limite = Time.realtimeSinceStartup + 20f;
-            while (estado == Estado.Final && finalFase == 0 && Time.realtimeSinceStartup < limite) yield return null;
-            yield return Esperar(4.5f);
-            yield return Captura("fin_del_prologo");
-            limite = Time.realtimeSinceStartup + 20f;
+            limite = Time.realtimeSinceStartup + 40f;
             while (estado == Estado.Final && Time.realtimeSinceStartup < limite) yield return null;
-            Comprobar("Termina en los créditos", estado == Estado.Creditos && origenCreditos == Estado.Final, "Estado: " + estado);
-            Comprobar("Objetivo 4 completado y progreso 100 %", progresion.Completado(4) && progresion.PorcentajeProgreso() >= 99.9f,
-                "Progreso " + Mathf.RoundToInt(progresion.PorcentajeProgreso()) + " %");
+            Comprobar("En lugar de los créditos se desbloquea el capítulo 2", estado == Estado.Capitulo2Aviso && cap2Desbloqueado, "Estado: " + estado);
+            Comprobar("Objetivo 4 completado", progresion.Completado(4));
             yield return Esperar(0.5f);
-            yield return Captura("creditos_final");
+            yield return Captura("capitulo2_desbloqueado");
+            estado = Estado.Creditos; origenCreditos = Estado.MenuPrincipal;
+            yield return Captura("creditos_fin_de_beta");
+            estado = Estado.Capitulo2Aviso;
+            SeguirCapitulo2();
+            Comprobar("Sigue el capítulo 2: encontrar la radio", progresion.EsActual(5) && estado == Estado.Jugando);
+        }
+
+        IEnumerator PasoCapitulo2()
+        {
+            yield return UsarEntidad(212, "Encender la radio", "radio");
+            Comprobar("La radio se enciende y completa el objetivo", radioTiempo >= 0f && progresion.Completado(5));
+            yield return Esperar(6f);
+            yield return Captura("radio_voz");
+            var e = mundo.BuscarEntidad(212);
+            objetivoInteraccion = e; puertaX = puertaY = -1;
+            Interactuar();
+            Comprobar("La transmisión se puede saltear", radioTiempo < 0f);
+            Comprobar("Sexto objetivo: cruzar el puente", progresion.EsActual(6));
+
+            var d = mundo.datos;
+            jugador.x = d.llegadaX; jugador.y = d.llegadaY + 1f; jugador.angulo = -90f * Mathf.Deg2Rad;
+            yield return Esperar(0.8f);
+            yield return Captura("corte_puente");
+            yield return Esperar(4f);
+            Comprobar("Cruzar el puente lleva al mapa de la 9 de Julio", mundo.datos.id == 2 && ContenidoJuego.MapaActual == 2, "Mapa " + mundo.datos.id);
+            Comprobar("Hay entre 12 y 16 bichos del lado de Capital", bichosTotalesMapa >= 12 && bichosTotalesMapa <= 16, "Bichos: " + bichosTotalesMapa);
+            jugador.invulnerable = true;
+            yield return Captura("puente_pueyrredon");
+
+            d = mundo.datos;
+            jugador.x = d.llegadaX; jugador.y = d.llegadaY; jugador.angulo = -90f * Mathf.Deg2Rad;
+            yield return Esperar(0.8f);
+            Comprobar("Al final del puente se completa el cruce", progresion.Completado(6) && progresion.EsActual(7));
+            yield return Captura("av_9_de_julio");
+            for (int i = 0; i < MuertosNecesarios(); i++) bichosMuertos.Add(2000 + i);
+            yield return Esperar(0.5f);
+            Comprobar("Derrotar a los bichos completa 'Ayudar a los soldados'", progresion.Completado(7) && progresion.EsActual(8));
+
+            yield return UsarEntidad(1310, "Hablar con el sargento");
+            Comprobar("Se abre el diálogo con el sargento", estado == Estado.Dialogo);
+            yield return Captura("dialogo_sargento");
+            for (int guarda = 0; guarda < 20 && estado == Estado.Dialogo; guarda++)
+            {
+                AvanzarDialogo();
+                yield return Esperar(0.2f);
+            }
+            Comprobar("Termina el capítulo 2 con CONTINUARÁ", estado == Estado.Continuara && progresion.Completado(8), "Estado: " + estado);
+            yield return Esperar(4.5f);
+            yield return Captura("continuara");
         }
 
         // ------------------------------------------------------------------
@@ -622,8 +716,8 @@ namespace Eternauta.Beta
             sb.AppendLine();
             foreach (var c in capturasPrueba) sb.AppendLine("- `" + c + "`");
             sb.AppendLine();
-            sb.AppendLine("La prueba usa las mismas funciones del juego (recoger, mesa de trabajo, puertas, radio, diálogo, inventario,");
-            sb.AppendLine("pausa, guardado, CONTINUAR y final) y ubica al protagonista al lado de cada objeto en lugar de caminar hasta él.");
+            sb.AppendLine("La prueba usa las mismas funciones del juego (cajones, mesa de trabajo, ascensor, combate, mapa, hotbar, radio,");
+            sb.AppendLine("diálogos, inventario, pausa, muerte, guardado, CONTINUAR y final) y ubica al protagonista al lado de cada objeto en lugar de caminar hasta él.");
             sb.AppendLine("El recorrido caminando con teclado y mouse se prueba a mano (ver docs/beta/PRUEBAS_BETA_1.1.md).");
 
             string ruta = Path.Combine(carpetaPrueba, "INFORME_PRUEBAS.md");
